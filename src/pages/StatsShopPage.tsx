@@ -1,0 +1,89 @@
+import { useMemo, useState, type FormEvent } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Check, Clock3, Edit3, Flame, Gift, Plus, ShoppingBag, Sparkles, X } from 'lucide-react'
+import clsx from 'clsx'
+import { addDays, dateKeyInTimeZone, formatDate } from '@/lib/date'
+import { decideRedemption, friendlyError, requestRedemption } from '@/lib/points'
+import { supabase } from '@/lib/supabase'
+import type { AppSnapshot, Redemption, Reward } from '@/types'
+import { AppIcon, iconNames } from '@/components/AppIcon'
+import { Button, Card, EmptyState, inputClass, Label, Notice } from '@/components/ui'
+
+type Range = '30' | '90' | 'all'
+
+function RewardForm({ reward, userId, onDone }: { reward?: Reward; userId: string; onDone?: () => void }) {
+  const queryClient = useQueryClient()
+  const [name, setName] = useState(reward?.name ?? '')
+  const [cost, setCost] = useState(reward?.point_cost?.toString() ?? '')
+  const [icon, setIcon] = useState(reward?.icon ?? 'Gift')
+  const [description, setDescription] = useState(reward?.description ?? '')
+  const [error, setError] = useState('')
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const payload = { name: name.trim(), point_cost: Number(cost), icon, description: description.trim() || null, ...(reward ? {} : { created_by: userId }) }
+      const result = reward ? await supabase.from('rewards').update(payload).eq('id', reward.id) : await supabase.from('rewards').insert(payload)
+      if (result.error) throw friendlyError(result.error)
+    },
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['snapshot', userId] }); if (!reward) { setName(''); setCost(''); setDescription(''); setIcon('Gift') } onDone?.() },
+    onError: (reason) => setError((reason as Error).message),
+  })
+  return <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_110px_auto]" onSubmit={(event: FormEvent) => { event.preventDefault(); setError(''); mutation.mutate() }}><div><Label htmlFor={`reward-name-${reward?.id ?? 'new'}`}>Reward name</Label><input id={`reward-name-${reward?.id ?? 'new'}`} className={inputClass} required maxLength={100} value={name} onChange={(event) => setName(event.target.value)} placeholder="Cook me dinner" /></div><div><Label htmlFor={`reward-cost-${reward?.id ?? 'new'}`}>Cost</Label><input id={`reward-cost-${reward?.id ?? 'new'}`} className={inputClass} type="number" min="1" required value={cost} onChange={(event) => setCost(event.target.value)} placeholder="20" /></div><div><Label htmlFor={`reward-icon-${reward?.id ?? 'new'}`}>Icon</Label><select id={`reward-icon-${reward?.id ?? 'new'}`} className={inputClass} value={icon} onChange={(event) => setIcon(event.target.value)}>{iconNames.map((item) => <option key={item}>{item}</option>)}</select></div><div className="sm:col-span-2"><Label htmlFor={`reward-description-${reward?.id ?? 'new'}`}>Description (optional)</Label><input id={`reward-description-${reward?.id ?? 'new'}`} className={inputClass} maxLength={500} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="A little detail about the treat…" /></div><div className="flex items-end"><Button type="submit" className="w-full" variant="accent" disabled={!name.trim() || Number(cost) <= 0 || mutation.isPending}>{mutation.isPending ? 'Saving…' : reward ? 'Save' : 'Add reward'}</Button></div>{error && <div className="sm:col-span-3"><Notice>{error}</Notice></div>}</form>
+}
+
+function PendingDecision({ item, snapshot, userId }: { item: Redemption; snapshot: AppSnapshot; userId: string }) {
+  const queryClient = useQueryClient()
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState('')
+  const mutation = useMutation({ mutationFn: (decision: 'confirmed' | 'declined') => decideRedemption(supabase, item.id, decision, reason), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['snapshot', userId] }), onError: (value) => setError((value as Error).message) })
+  const requester = snapshot.profiles.find((profile) => profile.id === item.redeemed_by)?.display_name ?? 'Partner'
+  return <div className="rounded-3xl bg-app-bg p-4"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-2xl bg-accent text-white"><Gift size={20} /></span><div className="min-w-0 flex-1"><p className="truncate font-black">{item.reward_name_snapshot}</p><p className="text-xs font-bold text-ink/45">{requester} · {item.point_cost_snapshot} pts</p></div></div><input className={`${inputClass} mt-3 min-h-9 py-2 text-xs`} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Optional decline reason" />{error && <div className="mt-2"><Notice>{error}</Notice></div>}<div className="mt-3 grid grid-cols-2 gap-2"><Button variant="danger" size="sm" onClick={() => mutation.mutate('declined')} disabled={mutation.isPending}><X size={15} /> Decline</Button><Button size="sm" onClick={() => mutation.mutate('confirmed')} disabled={mutation.isPending}><Check size={15} /> Confirm</Button></div></div>
+}
+
+export function StatsShopPage({ snapshot, userId }: { snapshot: AppSnapshot; userId: string }) {
+  const queryClient = useQueryClient()
+  const today = dateKeyInTimeZone(snapshot.settings.timezone)
+  const [range, setRange] = useState<Range>('30')
+  const [editing, setEditing] = useState<Reward | null>(null)
+  const [error, setError] = useState('')
+  const request = useMutation({ mutationFn: (rewardId: string) => requestRedemption(supabase, rewardId), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['snapshot', userId] }), onError: (reason) => setError((reason as Error).message) })
+  const archive = useMutation({ mutationFn: async (reward: Reward) => { const { error: archiveError } = await supabase.from('rewards').update({ archived: true }).eq('id', reward.id); if (archiveError) throw friendlyError(archiveError) }, onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['snapshot', userId] }), onError: (reason) => setError((reason as Error).message) })
+
+  const chartData = useMemo(() => {
+    const start = range === 'all' ? '0000-01-01' : addDays(today, -(Number(range) - 1))
+    const initialBalance = snapshot.ledger.filter((entry) => entry.date < start).reduce((sum, entry) => sum + entry.points, 0)
+    const byDate = snapshot.ledger.filter((entry) => entry.date >= start).reduce<Record<string, number>>((result, entry) => ({ ...result, [entry.date]: (result[entry.date] ?? 0) + entry.points }), {})
+    return Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).reduce<{ rows: Array<{ date: string; balance: number }>; balance: number }>((result, [date, points]) => {
+      const balance = result.balance + points
+      return { balance, rows: [...result.rows, { date: formatDate(date), balance }] }
+    }, { balance: initialBalance, rows: [] }).rows
+  }, [range, snapshot.ledger, today])
+  const categoryData = useMemo(() => {
+    const grouped = snapshot.ledger.filter((entry) => entry.points > 0 && entry.category_name).reduce<Record<string, number>>((result, entry) => ({ ...result, [entry.category_name!]: (result[entry.category_name!] ?? 0) + entry.points }), {})
+    return Object.entries(grouped).map(([name, points]) => ({ name, points })).sort((a, b) => b.points - a.points)
+  }, [snapshot.ledger])
+  const incoming = snapshot.redemptions.filter((item) => item.status === 'pending_confirmation' && item.redeemed_by !== userId)
+  const outgoing = snapshot.redemptions.filter((item) => item.status === 'pending_confirmation' && item.redeemed_by === userId)
+  const history = snapshot.redemptions.filter((item) => item.status !== 'pending_confirmation')
+  const activeRewards = snapshot.rewards.filter((item) => !item.archived)
+  const pendingRewardIds = new Set(outgoing.map((item) => item.reward_id))
+  const streaks = snapshot.streaks.filter((item) => item.current_streak > 0).sort((a, b) => b.current_streak - a.current_streak)
+
+  return <div className="space-y-8">
+    <div><p className="text-sm font-extrabold text-action">Progress you can feel</p><h1 className="mt-1 text-3xl font-black tracking-[-0.045em] sm:text-4xl">Stats + reward shop</h1><p className="mt-2 text-sm leading-6 text-ink/55">See where consistency is growing, then spend it on something lovely.</p></div>
+    {error && <Notice>{error}</Notice>}
+    <section className="grid gap-5 xl:grid-cols-[1.35fr_.65fr]">
+      <Card><div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-wider text-ink/40">Net points</p><h2 className="mt-1 text-xl font-black">Balance over time</h2></div><div className="flex rounded-2xl bg-app-bg p-1">{(['30','90','all'] as Range[]).map((item) => <button key={item} onClick={() => setRange(item)} className={clsx('rounded-xl px-3 py-1.5 text-xs font-black', range === item ? 'bg-white text-action shadow-soft' : 'text-ink/40')}>{item === 'all' ? 'All' : `${item}d`}</button>)}</div></div>{chartData.length ? <div className="h-64 w-full"><ResponsiveContainer><AreaChart data={chartData} margin={{ left: -20, right: 4 }}><defs><linearGradient id="points-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#758BFD" stopOpacity={0.45} /><stop offset="100%" stopColor="#758BFD" stopOpacity={0.02} /></linearGradient></defs><CartesianGrid stroke="#27187E" strokeOpacity={0.07} vertical={false} /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#27187E', opacity: .45, fontSize: 11 }} minTickGap={28} /><YAxis axisLine={false} tickLine={false} tick={{ fill: '#27187E', opacity: .45, fontSize: 11 }} /><Tooltip contentStyle={{ borderRadius: 16, border: 0, boxShadow: '0 12px 36px rgb(39 24 126 / .12)' }} /><Area type="monotone" dataKey="balance" stroke="#758BFD" strokeWidth={3} fill="url(#points-fill)" /></AreaChart></ResponsiveContainer></div> : <EmptyState icon={<Sparkles />} title="Points will chart themselves" body="Log your first habit and the balance line will start to grow." />}</Card>
+      <Card><div className="mb-4"><p className="text-[10px] font-black uppercase tracking-wider text-ink/40">Earned points</p><h2 className="mt-1 text-xl font-black">By category</h2></div>{categoryData.length ? <div className="h-64"><ResponsiveContainer><BarChart data={categoryData} layout="vertical" margin={{ left: 0, right: 10 }}><XAxis type="number" hide /><YAxis type="category" dataKey="name" width={105} axisLine={false} tickLine={false} tick={{ fill: '#27187E', fontSize: 10, fontWeight: 700 }} /><Tooltip cursor={{ fill: '#F1F2F6' }} contentStyle={{ borderRadius: 16, border: 0 }} /><Bar dataKey="points" radius={[0,8,8,0]}>{categoryData.map((_, index) => <Cell key={index} fill={['#FF8600','#758BFD','#27187E','#AEB8FE'][index % 4]} />)}</Bar></BarChart></ResponsiveContainer></div> : <p className="py-10 text-center text-sm font-semibold text-ink/40">No category points yet.</p>}</Card>
+    </section>
+
+    <section><div className="mb-4 flex items-center gap-2"><Flame className="text-accent" fill="currentColor" /><h2 className="text-2xl font-black tracking-tight">Current streaks</h2></div>{streaks.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{streaks.map((item) => { const habit = snapshot.habits.find((value) => value.id === item.habit_id); const category = snapshot.categories.find((value) => value.id === habit?.category_id); return habit ? <Card key={item.habit_id} className="flex items-center gap-3 p-4 sm:p-4"><span className="grid size-11 place-items-center rounded-2xl text-white" style={{ backgroundColor: category?.color }}><AppIcon name={habit.icon} /></span><div className="min-w-0"><p className="truncate font-black">{habit.name}</p><p className="text-xs font-extrabold text-accent">🔥 {item.current_streak} intervals</p></div></Card> : null })}</div> : <p className="text-sm font-semibold text-ink/45">Your first active streak will show up here.</p>}</section>
+
+    <section className="grid gap-6 xl:grid-cols-[1.35fr_.65fr]">
+      <div className="space-y-5"><Card className="bg-surface/60"><div className="mb-4 flex items-center gap-2"><Plus className="text-action" /><h2 className="text-xl font-black">Add a new reward</h2></div><RewardForm userId={userId} /></Card><div><div className="mb-4 flex items-center gap-2"><ShoppingBag className="text-action" /><h2 className="text-2xl font-black tracking-tight">Reward shop</h2></div>{activeRewards.length ? <div className="grid gap-3 sm:grid-cols-2">{activeRewards.map((reward) => { const pending = pendingRewardIds.has(reward.id); return <Card key={reward.id} className="flex flex-col p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid size-12 place-items-center rounded-2xl bg-surface/55 text-action"><AppIcon name={reward.icon} size={22} /></span><div className="min-w-0 flex-1"><p className="font-black">{reward.name}</p><p className="mt-0.5 text-sm font-black text-accent">{reward.point_cost} pts</p></div><Button variant="ghost" size="icon" onClick={() => setEditing(reward)} aria-label={`Edit ${reward.name}`}><Edit3 size={17} /></Button></div>{reward.description && <p className="mt-3 text-sm leading-6 text-ink/50">{reward.description}</p>}<Button className="mt-4 w-full" disabled={snapshot.balance < reward.point_cost || pending || request.isPending} onClick={() => { setError(''); request.mutate(reward.id) }}>{pending ? 'Awaiting partner' : snapshot.balance < reward.point_cost ? `Need ${reward.point_cost - snapshot.balance} more` : 'Redeem'}</Button></Card>})}</div> : <EmptyState icon={<Gift />} title="Your shop is ready for ideas" body="Add something meaningful, funny, restful, or delicious. No default rewards—this part is entirely yours." />}</div></div>
+      <aside className="space-y-5">{incoming.length > 0 && <Card><div className="mb-4 flex items-center gap-2"><Clock3 className="text-accent" /><h2 className="font-black">Needs your answer</h2></div><div className="space-y-3">{incoming.map((item) => <PendingDecision key={item.id} item={item} snapshot={snapshot} userId={userId} />)}</div></Card>}{outgoing.length > 0 && <Card><div className="mb-4 flex items-center gap-2"><Clock3 className="text-action" /><h2 className="font-black">Your pending requests</h2></div><div className="space-y-3">{outgoing.map((item) => <div key={item.id} className="rounded-2xl bg-app-bg p-3"><p className="font-black">{item.reward_name_snapshot}</p><p className="text-xs font-bold text-ink/45">Requested {formatDate(item.date_requested)} · {item.point_cost_snapshot} pts</p></div>)}</div></Card>}<Card><h2 className="mb-4 font-black">Redemption history</h2>{history.length ? <div className="space-y-4">{history.map((item) => { const requester = snapshot.profiles.find((profile) => profile.id === item.redeemed_by)?.display_name; const decider = snapshot.profiles.find((profile) => profile.id === item.decided_by)?.display_name; return <div key={item.id} className="border-b border-ink/8 pb-4 last:border-0 last:pb-0"><div className="flex items-center justify-between gap-3"><p className="font-black">{item.reward_name_snapshot}</p><span className={clsx('rounded-full px-2.5 py-1 text-[10px] font-black uppercase', item.status === 'confirmed' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>{item.status}</span></div><p className="mt-1 text-xs leading-5 text-ink/45">{requester} requested · {decider} {item.status === 'confirmed' ? 'confirmed' : 'declined'} {item.date_decided && formatDate(item.date_decided)}</p>{item.decision_note && <p className="mt-1 rounded-xl bg-red-50 px-2.5 py-2 text-xs text-red-700">“{item.decision_note}”</p>}</div> })}</div> : <p className="text-sm font-semibold text-ink/40">Confirmed and declined requests will be kept here.</p>}</Card></aside>
+    </section>
+
+    {editing && <div className="fixed inset-0 z-50 grid place-items-center bg-ink/25 p-5 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(null) }}><Card className="w-full max-w-2xl"><div className="mb-5 flex items-start justify-between"><div><h2 className="text-2xl font-black">Edit reward</h2><p className="mt-1 text-sm text-ink/50">Pending and past requests keep their original name and cost.</p></div><Button variant="ghost" size="icon" onClick={() => setEditing(null)}><X size={19} /></Button></div><RewardForm reward={editing} userId={userId} onDone={() => setEditing(null)} /><Button className="mt-3" variant="danger" onClick={() => archive.mutate(editing)} disabled={archive.isPending}>Archive reward</Button></Card></div>}
+  </div>
+}
