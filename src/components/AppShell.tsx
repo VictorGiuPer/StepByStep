@@ -10,14 +10,15 @@ import { Avatar, Button, inputClass, Label, Modal, Notice } from './ui'
 
 const navItems = [
   { to: '/', label: 'Today', icon: Home, end: true },
-  { to: '/categories', label: 'Categories', icon: Shapes },
+  { to: '/categories', label: 'Manage', icon: Shapes },
   { to: '/stats', label: 'Stats + Shop', icon: BarChart3 },
 ]
 
-export function AppShell({ snapshot, children }: PropsWithChildren<{ snapshot: AppSnapshot }>) {
+export function AppShell({ snapshot, children, demoUserId }: PropsWithChildren<{ snapshot: AppSnapshot; demoUserId?: string }>) {
   const { user, signOut } = useAuth()
   const queryClient = useQueryClient()
-  const profile = snapshot.profiles.find((item) => item.id === user?.id)
+  const effectiveUserId = user?.id ?? demoUserId
+  const profile = snapshot.profiles.find((item) => item.id === effectiveUserId)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [online, setOnline] = useState(navigator.onLine)
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '')
@@ -33,15 +34,15 @@ export function AppShell({ snapshot, children }: PropsWithChildren<{ snapshot: A
 
   const saveSettings = useMutation({
     mutationFn: async () => {
-      if (!user) return
+      if (!effectiveUserId || demoUserId) return
       const [profileResult, settingsResult] = await Promise.all([
-        supabase.from('profiles').update({ display_name: displayName.trim(), avatar_url: avatarUrl.trim() || null }).eq('id', user.id),
+        supabase.from('profiles').update({ display_name: displayName.trim(), avatar_url: avatarUrl.trim() || null }).eq('id', effectiveUserId),
         supabase.from('app_settings').update({ timezone: timezone.trim() }).eq('id', 1),
       ])
       if (profileResult.error) throw profileResult.error
       if (settingsResult.error) throw settingsResult.error
     },
-    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['snapshot', user?.id] }); setSettingsOpen(false) },
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['snapshot', effectiveUserId] }); setSettingsOpen(false) },
     onError: (error) => setFormError((error as Error).message),
   })
 
@@ -71,7 +72,7 @@ export function AppShell({ snapshot, children }: PropsWithChildren<{ snapshot: A
         <div><Label htmlFor="avatar-url">Avatar URL (optional)</Label><input id="avatar-url" type="url" className={inputClass} placeholder="https://…" value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} /></div>
         <div><Label htmlFor="timezone">Household timezone</Label><input id="timezone" className={inputClass} value={timezone} onChange={(event) => setTimezone(event.target.value)} /><p className="mt-1.5 text-xs leading-5 text-ink/45">Use an IANA timezone such as Europe/Brussels. This controls “today” and Monday–Sunday week boundaries.</p></div>
         {formError && <Notice>{formError}</Notice>}
-        <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-between"><Button variant="ghost" onClick={() => void signOut()}><LogOut size={17} /> Sign out</Button><Button disabled={!displayName.trim() || !timezone.trim() || saveSettings.isPending} onClick={() => { setFormError(''); saveSettings.mutate() }}>{saveSettings.isPending ? 'Saving…' : 'Save settings'}</Button></div>
+        <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-between"><Button variant="ghost" onClick={() => { if (demoUserId) window.location.href = window.location.pathname; else void signOut() }}><LogOut size={17} /> {demoUserId ? 'Exit preview' : 'Sign out'}</Button><Button disabled={Boolean(demoUserId) || !displayName.trim() || !timezone.trim() || saveSettings.isPending} onClick={() => { setFormError(''); saveSettings.mutate() }}>{demoUserId ? 'Preview only' : saveSettings.isPending ? 'Saving…' : 'Save settings'}</Button></div>
       </div>
     </Modal>
   </div>

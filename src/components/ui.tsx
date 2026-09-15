@@ -37,8 +37,8 @@ export function Modal({ open, onClose, title, description, children, size = 'md'
   }, [onClose, open])
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 grid place-items-end bg-ink/25 p-0 backdrop-blur-sm sm:place-items-center sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="modal-title" className={clsx('max-h-[94vh] w-full overflow-y-auto rounded-t-[32px] bg-app-bg p-5 shadow-nav sm:rounded-[32px] sm:p-6', size === 'sm' && 'sm:max-w-md', size === 'md' && 'sm:max-w-2xl', size === 'lg' && 'sm:max-w-4xl')}>
+    <div className="fixed inset-0 z-50 grid place-items-end bg-ink/25 p-3 backdrop-blur-sm sm:place-items-center sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="modal-title" className={clsx('dialog-in max-h-[91vh] w-full overflow-y-auto rounded-[32px] bg-app-bg p-5 shadow-nav sm:p-6', size === 'sm' && 'sm:max-w-md', size === 'md' && 'sm:max-w-2xl', size === 'lg' && 'sm:max-w-4xl')}>
         <div className="mb-5 flex items-start justify-between gap-4">
           <div><h2 id="modal-title" className="text-2xl font-black tracking-tight">{title}</h2>{description && <p className="mt-1 text-sm leading-6 text-ink/55">{description}</p>}</div>
           <Button type="button" variant="ghost" size="icon" aria-label="Close" onClick={onClose}><X size={20} /></Button>

@@ -107,7 +107,7 @@ export function completionForInterval(
   const schedule = resolveSchedule(habitId, date, schedules)
   if (!schedule) return undefined
   const expectedInterval = intervalStart(schedule, date)
-  return completions.find((item) => item.habit_id === habitId && item.user_id === userId && item.schedule_version_id === schedule.id && item.interval_start === expectedInterval)
+  return completions.find((item) => !item.voided_at && item.habit_id === habitId && item.user_id === userId && item.schedule_version_id === schedule.id && item.interval_start === expectedInterval)
 }
 
 export function bonusForStreak(streak: number): number {

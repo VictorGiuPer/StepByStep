@@ -3,7 +3,7 @@ export type HabitScope = 'personal' | 'shared'
 export type HabitFrequency = 'daily' | 'weekly' | 'custom_days'
 export type HabitSize = 'small' | 'medium' | 'large'
 export type RedemptionStatus = 'pending_confirmation' | 'confirmed' | 'declined'
-export type LedgerSource = 'habit_completion' | 'streak_bonus' | 'reward_redemption'
+export type LedgerSource = 'habit_completion' | 'streak_bonus' | 'habit_completion_reversal' | 'habit_completion_restore' | 'reward_redemption'
 
 export interface Profile {
   id: string
@@ -61,6 +61,8 @@ export interface Completion {
   note: string | null
   base_points_snapshot: number
   created_at: string
+  voided_at?: string | null
+  voided_by?: string | null
 }
 
 export interface Reward {

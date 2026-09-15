@@ -8,15 +8,16 @@ const habit: Habit = { id: 'h1', name: 'Morning stretch', icon: 'Heart', categor
 const category: Category = { id: 'c1', name: 'Health & Body', icon: 'HeartPulse', color: '#FF8600', sort_order: 1, created_by: null }
 
 describe('HabitCard', () => {
-  it('supports one-tap completion and opening details', async () => {
-    const user = userEvent.setup(); const complete = vi.fn(); const open = vi.fn()
-    render(<HabitCard habit={habit} category={category} streak={4} completed={false} onComplete={complete} onOpen={open} />)
+  it('supports one-tap completion without an edit target', async () => {
+    const user = userEvent.setup(); const complete = vi.fn()
+    render(<HabitCard habit={habit} category={category} streak={4} completed={false} onComplete={complete} />)
     expect(screen.getByText('Morning stretch')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Complete Morning stretch' })); expect(complete).toHaveBeenCalledOnce()
-    await user.click(screen.getByRole('button', { name: 'Open Morning stretch' })); expect(open).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('button', { name: 'Open Morning stretch' })).not.toBeInTheDocument()
   })
-  it('removes the completion action after the interval is done', () => {
-    render(<HabitCard habit={habit} category={category} streak={5} completed onComplete={vi.fn()} onOpen={vi.fn()} />)
+  it('offers an undo action after the interval is done', () => {
+    render(<HabitCard habit={habit} category={category} streak={5} completed onComplete={vi.fn()} />)
     expect(screen.queryByRole('button', { name: 'Complete Morning stretch' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Undo Morning stretch completion' })).toBeDisabled()
   })
 })
