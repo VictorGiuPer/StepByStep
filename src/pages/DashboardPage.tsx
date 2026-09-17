@@ -8,6 +8,8 @@ import {
   Flame,
   Gift,
   ListTodo,
+  Minus,
+  Plus,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -19,6 +21,7 @@ import {
   isHabitDue,
 } from "@/lib/date";
 import {
+  adjustWeeklyHabit,
   decideRedemption,
   toggleHabitCompletion,
   toggleTodo,
@@ -225,11 +228,13 @@ export function DashboardPage({
       queryClient.invalidateQueries({ queryKey: ["snapshot", userId] }),
     onError: (error) => setCompleteError((error as Error).message),
   });
+  const weeklyAdjust = useMutation({ mutationFn: ({ habitId, delta }: { habitId: string; delta: number }) => adjustWeeklyHabit(supabase, habitId, delta), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["snapshot", userId] }), onError: (error) => setCompleteError((error as Error).message) });
   const undo = complete;
   const dueHabits = useMemo(
     () =>
       snapshot.habits.filter(
         (habit) =>
+          !habit.weekly_target &&
           isHabitDue(habit, today, userId, snapshot.schedules) &&
           (categoryId === "all" || habit.category_id === categoryId),
       ),
@@ -252,6 +257,7 @@ export function DashboardPage({
   const todos = snapshot.todos.filter(
     (todo) => todo.scope === "shared" || todo.owner_user_id === userId,
   );
+  const flexibleHabits = snapshot.habits.filter((habit) => !habit.archived && habit.weekly_target && (habit.scope === "shared" || habit.owner_user_id === userId));
   return (
     <div className="space-y-5">
       <div>
@@ -353,6 +359,7 @@ export function DashboardPage({
           />
         )}
       </section>
+      {flexibleHabits.length > 0 && <section><div className="mb-3 flex items-center gap-2"><Flame className="text-accent" size={18} /><h2 className="font-black">This week</h2></div><div className="space-y-2">{flexibleHabits.map((habit) => { const count = snapshot.weeklyProgress.find((item) => item.habit_id === habit.id && item.user_id === userId)?.count ?? 0; const category = snapshot.categories.find((item) => item.id === habit.category_id); return <article key={habit.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2.5 shadow-soft"><span className="grid size-10 place-items-center rounded-xl text-white" style={{ backgroundColor: category?.color ?? "#758BFD" }}><AppIcon name={habit.icon} size={19} /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{habit.name}</p><p className="text-xs font-bold text-action">{count} / {habit.weekly_target} this week</p></div><Button size="icon" variant="ghost" onClick={() => weeklyAdjust.mutate({ habitId: habit.id, delta: -1 })} disabled={count === 0 || weeklyAdjust.isPending}><Minus size={17} /></Button><Button size="icon" onClick={() => weeklyAdjust.mutate({ habitId: habit.id, delta: 1 })} disabled={weeklyAdjust.isPending}><Plus size={18} /></Button></article> })}</div></section>}
       {todos.length > 0 && (
         <section>
           <div className="mb-3 flex items-center gap-2">

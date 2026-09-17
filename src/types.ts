@@ -1,9 +1,9 @@
 export type HabitType = 'build' | 'avoid'
 export type HabitScope = 'personal' | 'shared'
-export type HabitFrequency = 'daily' | 'weekly' | 'custom_days'
+export type HabitFrequency = 'daily' | 'weekly' | 'custom_days' | 'flexible_weekly'
 export type HabitSize = 'small' | 'medium' | 'large'
 export type RedemptionStatus = 'pending_confirmation' | 'confirmed' | 'declined'
-export type LedgerSource = 'habit_completion' | 'streak_bonus' | 'habit_completion_reversal' | 'habit_completion_restore' | 'reward_redemption'
+export type LedgerSource = 'habit_completion' | 'streak_bonus' | 'habit_completion_reversal' | 'habit_completion_restore' | 'reward_redemption' | 'todo_completion' | 'todo_completion_reversal' | 'weekly_habit_progress' | 'weekly_habit_progress_reversal'
 
 export interface Profile {
   id: string
@@ -47,6 +47,13 @@ export interface TodoCompletion {
   completed_at: string
 }
 
+export interface HabitWeeklyProgress {
+  habit_id: string
+  user_id: string
+  week_start: string
+  count: number
+}
+
 export interface Habit {
   id: string
   name: string
@@ -59,6 +66,7 @@ export interface Habit {
   custom_days: number[] | null
   size: HabitSize
   base_points: number
+  weekly_target?: number | null
   archived: boolean
   created_at: string
   updated_at: string
@@ -172,6 +180,7 @@ export interface AppSnapshot {
   habits: Habit[]
   todos: Todo[]
   todoCompletions: TodoCompletion[]
+  weeklyProgress: HabitWeeklyProgress[]
   schedules: HabitSchedule[]
   completions: Completion[]
   balance: number
@@ -195,4 +204,5 @@ export interface HabitInput {
   customDays: number[]
   size: HabitSize
   archived: boolean
+  weeklyTarget?: number | null
 }

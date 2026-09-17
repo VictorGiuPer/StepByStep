@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from './supabase'
-import type { AppSettings, AppSnapshot, Category, Completion, CoupleConnection, FeedEntry, Habit, HabitSchedule, HabitStreak, LedgerEntry, PointBalance, Profile, Redemption, Reward, Todo, TodoCompletion } from '@/types'
+import type { AppSettings, AppSnapshot, Category, Completion, CoupleConnection, FeedEntry, Habit, HabitSchedule, HabitStreak, HabitWeeklyProgress, LedgerEntry, PointBalance, Profile, Redemption, Reward, Todo, TodoCompletion } from '@/types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new Error(result.error.message)
@@ -15,12 +15,13 @@ export async function loadSnapshot(userId: string): Promise<AppSnapshot> {
   ])
   const visibleProfiles = unwrap(profiles) as Profile[]
   const connectionState = ((unwrap(connection) as CoupleConnection[])[0] ?? { state: 'unlinked', request_id: null, requested_by: null, requested_to: null, created_at: null }) as CoupleConnection
-  const [settings, categories, habits, todos, todoCompletions, schedules, completions, balances, rewards, redemptions, ledger, feed, streakGroups] = await Promise.all([
+  const [settings, categories, habits, todos, todoCompletions, weeklyProgress, schedules, completions, balances, rewards, redemptions, ledger, feed, streakGroups] = await Promise.all([
     supabase.from('app_settings').select('id,timezone').eq('id', 1).single(),
     supabase.from('categories').select('*').order('sort_order').order('name'),
     supabase.from('habits').select('*').order('created_at'),
     supabase.from('todos').select('*').eq('archived', false).order('created_at'),
     supabase.from('todo_completions').select('*'),
+    supabase.from('habit_weekly_progress').select('*'),
     supabase.from('habit_schedule_versions').select('*').order('effective_from'),
     supabase.from('habit_completions').select('*').order('date'),
     supabase.from('point_balances').select('user_id,balance'),
@@ -40,6 +41,7 @@ export async function loadSnapshot(userId: string): Promise<AppSnapshot> {
     habits: unwrap(habits) as Habit[],
     todos: unwrap(todos) as Todo[],
     todoCompletions: unwrap(todoCompletions) as TodoCompletion[],
+    weeklyProgress: unwrap(weeklyProgress) as HabitWeeklyProgress[],
     schedules: unwrap(schedules) as HabitSchedule[],
     completions: unwrap(completions) as Completion[],
     balance: pointBalances.find((item) => item.user_id === userId)?.balance ?? 0,

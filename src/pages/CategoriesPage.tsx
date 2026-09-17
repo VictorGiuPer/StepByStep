@@ -398,7 +398,9 @@ function TodoSection({
 }
 
 function scheduleLabel(habit: Habit) {
-  return habit.frequency === "daily"
+  return habit.weekly_target
+    ? `${habit.weekly_target} flexible/week`
+    : habit.frequency === "daily"
     ? "Daily"
     : habit.frequency === "weekly"
       ? "Weekly"

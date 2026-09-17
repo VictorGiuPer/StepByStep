@@ -32,8 +32,10 @@ export function habitRpcPayload(input: HabitInput) {
     p_category_id: input.categoryId,
     p_type: input.type,
     p_scope: input.scope,
-    p_frequency: input.frequency,
-    p_custom_days: input.frequency === 'custom_days' ? input.customDays : null,
+    // Flexible targets are scheduled daily in the existing routine engine, but
+    // are rendered as one weekly counter rather than daily checkmarks.
+    p_frequency: input.frequency === 'flexible_weekly' ? 'custom_days' : input.frequency,
+    p_custom_days: input.frequency === 'flexible_weekly' ? [1, 2, 3, 4, 5, 6, 7] : input.frequency === 'custom_days' ? input.customDays : null,
     p_size: input.size,
     p_archived: input.archived,
   }
@@ -43,6 +45,12 @@ export async function saveHabit(client: SupabaseClient, input: HabitInput) {
   if (isDemoMode) return { id: input.id ?? 'preview-habit' }
   const { data, error } = await client.rpc('save_habit', habitRpcPayload(input))
   if (error) throw friendlyError(error)
+  const habit = Array.isArray(data) ? data[0] : data
+  const { error: targetError } = await client.rpc('set_habit_weekly_target', {
+    p_habit_id: (habit as { id: string }).id,
+    p_target: input.frequency === 'flexible_weekly' ? input.weeklyTarget ?? 3 : null,
+  })
+  if (targetError) throw friendlyError(targetError)
   return data
 }
 
@@ -73,6 +81,12 @@ export async function toggleHabitCompletion(client: SupabaseClient, habitId: str
 export async function toggleTodo(client: SupabaseClient, todoId: string) {
   if (isDemoMode) return
   const { error } = await client.rpc('toggle_todo_completion', { p_todo_id: todoId })
+  if (error) throw friendlyError(error)
+}
+
+export async function adjustWeeklyHabit(client: SupabaseClient, habitId: string, delta: number) {
+  if (isDemoMode) return
+  const { error } = await client.rpc('adjust_weekly_habit_progress', { p_habit_id: habitId, p_delta: delta })
   if (error) throw friendlyError(error)
 }
 
