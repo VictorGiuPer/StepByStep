@@ -38,7 +38,7 @@ function DemoApp() {
 function AppGate() {
   const { user, loading } = useAuth()
   if (isDemoMode) return <DemoApp />
-  if (new URLSearchParams(window.location.search).get('recovery') === '1') return <RecoveryPage />
+  if (new URLSearchParams(window.location.search).get('recovery') === '1' || /(?:^|&)type=recovery(?:&|$)/.test(window.location.hash.slice(1))) return <RecoveryPage />
   if (loading) return <BrandedLoader />
   return user ? <AuthenticatedApp userId={user.id} /> : <LoginPage />
 }
