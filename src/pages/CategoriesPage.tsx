@@ -402,7 +402,7 @@ function scheduleLabel(habit: Habit) {
     ? "Daily"
     : habit.frequency === "weekly"
       ? "Weekly"
-      : "Selected days";
+      : `${habit.custom_days?.length ?? 0} times/week`;
 }
 
 export function CategoriesPage({
