@@ -9,6 +9,7 @@ import { createDemoSnapshot, DEMO_USER_ID, isDemoMode, previewComplete, previewD
 import type { AppSnapshot } from '@/types'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { LoginPage } from '@/pages/LoginPage'
+import { RecoveryPage } from '@/pages/RecoveryPage'
 
 const CategoriesPage = lazy(() => import('@/pages/CategoriesPage').then((module) => ({ default: module.CategoriesPage })))
 const StatsShopPage = lazy(() => import('@/pages/StatsShopPage').then((module) => ({ default: module.StatsShopPage })))
@@ -37,6 +38,7 @@ function DemoApp() {
 function AppGate() {
   const { user, loading } = useAuth()
   if (isDemoMode) return <DemoApp />
+  if (new URLSearchParams(window.location.search).get('recovery') === '1') return <RecoveryPage />
   if (loading) return <BrandedLoader />
   return user ? <AuthenticatedApp userId={user.id} /> : <LoginPage />
 }

@@ -8,6 +8,7 @@ interface AuthValue {
   user: User | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
+  updatePassword: (password: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -41,6 +42,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     loading,
     signIn: async (email, password) => {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      if (error) throw friendlyError(error)
+    },
+    updatePassword: async (password) => {
+      const { error } = await supabase.auth.updateUser({ password })
       if (error) throw friendlyError(error)
     },
     signOut: async () => {
