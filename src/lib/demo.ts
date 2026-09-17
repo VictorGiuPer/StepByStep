@@ -37,7 +37,7 @@ export function createDemoSnapshot(): AppSnapshot {
   }).filter((entry) => entry.user_id === DEMO_USER_ID)
   return {
     profiles: [{ id: DEMO_USER_ID, display_name: 'Nadine', avatar_url: null }, { id: PARTNER_USER_ID, display_name: 'Victor', avatar_url: null }],
-    settings: { id: 1, timezone: 'Europe/Brussels' }, categories: [...categories], habits, schedules, completions, balance: 24,
+    settings: { id: 1, timezone: 'Europe/Brussels' }, categories: [...categories], habits, todos: [], todoCompletions: [], schedules, completions, balance: 24, balances: [{ user_id: DEMO_USER_ID, balance: 24 }, { user_id: PARTNER_USER_ID, balance: 18 }], connection: { state: 'connected', request_id: null, requested_by: null, requested_to: null, created_at: null },
     rewards: [
       { id: 'r-pizza', name: 'Domino’s night', description: 'Pick the movie, the toppings, and the blanket.', point_cost: 18, icon: 'Pizza', created_by: PARTNER_USER_ID, archived: false, created_at: `${day(-14)}T12:00:00Z`, updated_at: `${day(-14)}T12:00:00Z` },
       { id: 'r-massage', name: '30-minute massage', description: 'Phone-free, unhurried, and fully deserved.', point_cost: 24, icon: 'HeartHandshake', created_by: PARTNER_USER_ID, archived: false, created_at: `${day(-10)}T12:00:00Z`, updated_at: `${day(-10)}T12:00:00Z` },

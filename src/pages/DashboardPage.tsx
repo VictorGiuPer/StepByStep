@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { BellRing, ChevronLeft, ChevronRight, Flame, Gift } from 'lucide-react'
 import clsx from 'clsx'
 import { addDays, completionForInterval, dateKeyInTimeZone, formatDate, formatFullDate, isHabitDue } from '@/lib/date'
-import { decideRedemption, logCompletion, undoTodayCompletion } from '@/lib/points'
+import { decideRedemption, toggleHabitCompletion } from '@/lib/points'
 import { supabase } from '@/lib/supabase'
 import type { AppSnapshot, Habit, Redemption } from '@/types'
 import { AppIcon } from '@/components/AppIcon'
@@ -26,11 +26,11 @@ function ApprovalAlert({ redemption, snapshot, userId, onPreviewDecision }: { re
   return <div className="rounded-2xl bg-surface/50 p-3"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent text-white"><Gift size={17} /></span><p className="min-w-0 flex-1 text-sm font-black"><span className="text-action">{requester}</span> wants {redemption.reward_name_snapshot}</p><Button size="sm" onClick={() => mutation.mutate('confirmed')} disabled={mutation.isPending}>Confirm</Button></div>{error && <div className="mt-2"><Notice>{error}</Notice></div>}</div>
 }
 
-export function DashboardPage({ snapshot, userId, onPreviewComplete, onPreviewUndo, onPreviewDecision }: { snapshot: AppSnapshot; userId: string; onPreviewComplete?: PreviewComplete; onPreviewUndo?: PreviewUndo; onPreviewDecision?: PreviewDecision }) {
+export function DashboardPage({ snapshot, userId, onPreviewComplete, onPreviewDecision }: { snapshot: AppSnapshot; userId: string; onPreviewComplete?: PreviewComplete; onPreviewUndo?: PreviewUndo; onPreviewDecision?: PreviewDecision }) {
   const queryClient = useQueryClient(); const today = dateKeyInTimeZone(snapshot.settings.timezone)
   const [categoryId, setCategoryId] = useState('all'); const [weekStart, setWeekStart] = useState(today); const [completeError, setCompleteError] = useState('')
-  const complete = useMutation({ mutationFn: (habitId: string) => onPreviewComplete ? Promise.resolve(onPreviewComplete(habitId)) : logCompletion(supabase, habitId, today), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['snapshot', userId] }), onError: (error) => setCompleteError((error as Error).message) })
-  const undo = useMutation({ mutationFn: (habitId: string) => onPreviewUndo ? Promise.resolve(onPreviewUndo(habitId)).then(() => ({ balance: 0, current_streak: 0 })) : undoTodayCompletion(supabase, habitId), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['snapshot', userId] }), onError: (error) => setCompleteError((error as Error).message) })
+  const complete = useMutation({ mutationFn: (habitId: string) => onPreviewComplete ? Promise.resolve(onPreviewComplete(habitId)).then(() => undefined) : toggleHabitCompletion(supabase, habitId, today), onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['snapshot', userId] }), onError: (error) => setCompleteError((error as Error).message) })
+  const undo = complete
   const dueHabits = useMemo(() => snapshot.habits.filter((habit) => isHabitDue(habit, today, userId, snapshot.schedules) && (categoryId === 'all' || habit.category_id === categoryId)), [categoryId, snapshot.habits, snapshot.schedules, today, userId])
   const pendingIncoming = snapshot.redemptions.filter((item) => item.status === 'pending_confirmation' && item.redeemed_by !== userId)
   const remaining = dueHabits.filter((habit) => !completionForInterval(habit.id, userId, today, snapshot.schedules, snapshot.completions)).length

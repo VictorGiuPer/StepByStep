@@ -64,6 +64,18 @@ export async function undoTodayCompletion(client: SupabaseClient, habitId: strin
   return Array.isArray(data) ? data[0] : data
 }
 
+export async function toggleHabitCompletion(client: SupabaseClient, habitId: string, date: string) {
+  if (isDemoMode) return
+  const { error } = await client.rpc('toggle_habit_completion', { p_habit_id: habitId, p_completion_date: date })
+  if (error) throw friendlyError(error)
+}
+
+export async function toggleTodo(client: SupabaseClient, todoId: string) {
+  if (isDemoMode) return
+  const { error } = await client.rpc('toggle_todo_completion', { p_todo_id: todoId })
+  if (error) throw friendlyError(error)
+}
+
 export async function requestRedemption(client: SupabaseClient, rewardId: string): Promise<Redemption> {
   if (isDemoMode) return { id: 'preview-redemption', reward_id: rewardId, reward_name_snapshot: 'Preview reward', point_cost_snapshot: 0, redeemed_by: 'preview-user', date_requested: new Date().toISOString().slice(0, 10), date_confirmed: null, date_decided: null, decided_by: null, decision_note: null, status: 'pending_confirmation', created_at: new Date().toISOString() }
   const { data, error } = await client.rpc('request_redemption', { p_reward_id: rewardId })

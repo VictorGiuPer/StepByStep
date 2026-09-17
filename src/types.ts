@@ -23,6 +23,28 @@ export interface Category {
   color: string
   sort_order: number
   created_by: string | null
+  scope?: HabitScope
+  owner_user_id?: string | null
+}
+
+export interface Todo {
+  id: string
+  name: string
+  icon: string
+  category_id: string
+  scope: HabitScope
+  owner_user_id: string | null
+  size: HabitSize
+  base_points: number
+  archived: boolean
+  completed_at: string | null
+  created_at: string
+}
+
+export interface TodoCompletion {
+  todo_id: string
+  user_id: string
+  completed_at: string
 }
 
 export interface Habit {
@@ -128,14 +150,33 @@ export interface HabitStreak {
   current_streak: number
 }
 
+export type CoupleLinkState = 'unlinked' | 'pending' | 'connected'
+
+export interface CoupleConnection {
+  state: CoupleLinkState
+  request_id: string | null
+  requested_by: string | null
+  requested_to: string | null
+  created_at: string | null
+}
+
+export interface PointBalance {
+  user_id: string
+  balance: number
+}
+
 export interface AppSnapshot {
   profiles: Profile[]
   settings: AppSettings
   categories: Category[]
   habits: Habit[]
+  todos: Todo[]
+  todoCompletions: TodoCompletion[]
   schedules: HabitSchedule[]
   completions: Completion[]
   balance: number
+  balances: PointBalance[]
+  connection: CoupleConnection
   rewards: Reward[]
   redemptions: Redemption[]
   ledger: LedgerEntry[]

@@ -1,6 +1,6 @@
 import { useEffect, useState, type PropsWithChildren } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { BarChart3, Home, LogOut, Settings, Shapes, Sparkles, WifiOff } from 'lucide-react'
+import { BarChart3, HeartHandshake, Home, LogOut, Mail, Settings, Shapes, Sparkles, WifiOff } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import clsx from 'clsx'
 import { useAuth } from '@/auth/AuthProvider'
@@ -25,6 +25,7 @@ export function AppShell({ snapshot, children, demoUserId }: PropsWithChildren<{
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url ?? '')
   const [timezone, setTimezone] = useState(snapshot.settings.timezone)
   const [formError, setFormError] = useState('')
+  const [partnerEmail, setPartnerEmail] = useState('')
 
   useEffect(() => {
     const update = () => setOnline(navigator.onLine)
@@ -43,6 +44,25 @@ export function AppShell({ snapshot, children, demoUserId }: PropsWithChildren<{
       if (settingsResult.error) throw settingsResult.error
     },
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['snapshot', effectiveUserId] }); setSettingsOpen(false) },
+    onError: (error) => setFormError((error as Error).message),
+  })
+
+  const link = useMutation({
+    mutationFn: async () => {
+      if (demoUserId) return
+      const { error } = await supabase.rpc('request_couple_link', { p_email: partnerEmail.trim() })
+      if (error) throw error
+    },
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['snapshot', effectiveUserId] }); setPartnerEmail('') },
+    onError: (error) => setFormError((error as Error).message),
+  })
+  const decideLink = useMutation({
+    mutationFn: async (accept: boolean) => {
+      if (!snapshot.connection.request_id || demoUserId) return
+      const { error } = await supabase.rpc('decide_couple_link', { p_request_id: snapshot.connection.request_id, p_accept: accept })
+      if (error) throw error
+    },
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['snapshot', effectiveUserId] }) },
     onError: (error) => setFormError((error as Error).message),
   })
 
@@ -66,11 +86,14 @@ export function AppShell({ snapshot, children, demoUserId }: PropsWithChildren<{
 
     <main className="mx-auto max-w-7xl px-5 pb-28 pt-7 lg:px-8 lg:pl-32">{children}</main>
 
-    <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="Your settings" description="Profile details are visible only to the two of you." size="sm">
+    <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="Your settings" description="Profile details are visible only to your connected partner." size="sm">
       <div className="space-y-4">
         <div><Label htmlFor="display-name">Display name</Label><input id="display-name" className={inputClass} maxLength={60} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></div>
         <div><Label htmlFor="avatar-url">Avatar URL (optional)</Label><input id="avatar-url" type="url" className={inputClass} placeholder="https://…" value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} /></div>
         <div><Label htmlFor="timezone">Household timezone</Label><input id="timezone" className={inputClass} value={timezone} onChange={(event) => setTimezone(event.target.value)} /><p className="mt-1.5 text-xs leading-5 text-ink/45">Use an IANA timezone such as Europe/Brussels. This controls “today” and Monday–Sunday week boundaries.</p></div>
+        <div className="rounded-2xl bg-app-bg p-4">
+          <div className="flex gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent text-white"><HeartHandshake size={17} /></span><div><p className="font-black">Your couple</p>{snapshot.connection.state === 'connected' ? <p className="mt-1 text-xs leading-5 text-ink/55">Connected. Your shared habits, rewards, and progress are visible only to the two of you.</p> : snapshot.connection.state === 'pending' ? snapshot.connection.requested_to === effectiveUserId ? <><p className="mt-1 text-xs leading-5 text-ink/55">You have a request to connect accounts.</p><div className="mt-3 flex gap-2"><Button size="sm" variant="ghost" onClick={() => decideLink.mutate(false)} disabled={decideLink.isPending}>Decline</Button><Button size="sm" onClick={() => decideLink.mutate(true)} disabled={decideLink.isPending}>{decideLink.isPending ? 'Saving…' : 'Accept connection'}</Button></div></> : <p className="mt-1 text-xs leading-5 text-ink/55">Connection request sent. It will become active once your partner accepts it.</p> : <><p className="mt-1 text-xs leading-5 text-ink/55">Send a private request to the email they use to sign in. They must accept before either account can see shared progress.</p><div className="mt-3 flex gap-2"><div className="relative min-w-0 flex-1"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30" size={15} /><input aria-label="Partner email" className={`${inputClass} min-h-9 py-2 pl-9 text-xs`} type="email" value={partnerEmail} onChange={(event) => setPartnerEmail(event.target.value)} placeholder="partner@example.com" /></div><Button size="sm" onClick={() => { setFormError(''); link.mutate() }} disabled={Boolean(demoUserId) || !partnerEmail.trim() || link.isPending}>{link.isPending ? 'Sending…' : 'Connect'}</Button></div></>}</div></div>
+        </div>
         {formError && <Notice>{formError}</Notice>}
         <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-between"><Button variant="ghost" onClick={() => { if (demoUserId) window.location.href = window.location.pathname; else void signOut() }}><LogOut size={17} /> {demoUserId ? 'Exit preview' : 'Sign out'}</Button><Button disabled={Boolean(demoUserId) || !displayName.trim() || !timezone.trim() || saveSettings.isPending} onClick={() => { setFormError(''); saveSettings.mutate() }}>{demoUserId ? 'Preview only' : saveSettings.isPending ? 'Saving…' : 'Save settings'}</Button></div>
       </div>
