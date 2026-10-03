@@ -6,6 +6,14 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
+  build: {
+    rollupOptions: {
+      input: {
+        app: fileURLToPath(new URL('./index.html', import.meta.url)),
+        oauthConsent: fileURLToPath(new URL('./oauth/consent/index.html', import.meta.url)),
+      },
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),

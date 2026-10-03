@@ -18,5 +18,13 @@ site_url = "http://127.0.0.1:5173"
 additional_redirect_urls = ["http://localhost:5173"]
 enable_signup = false
 
+[auth.oauth_server]
+enabled = true
+authorization_url_path = "/oauth/consent/"
+allow_dynamic_registration = true
+
+[functions.mcp]
+verify_jwt = false
+
 [realtime]
 enabled = true
