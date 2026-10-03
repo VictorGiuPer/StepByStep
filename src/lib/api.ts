@@ -66,6 +66,13 @@ export function useRealtimeRefresh(userId: string) {
     const channel = supabase
       .channel(`step-by-step-${userId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'habit_completions' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'habits' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'todos' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'todo_completions' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'habit_weekly_progress' }, refresh)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'points_ledger' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rewards' }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'redemptions' }, refresh)
       .subscribe()
     const onOnline = () => refresh()

@@ -1,14 +1,14 @@
 import {
   Apple, BookOpen, Brain, BriefcaseBusiness, CalendarCheck, CheckCircle2, ChefHat,
-  Circle, Dumbbell, Flame, Gift, GraduationCap, HandHeart, Heart, HeartPulse, House,
-  Languages, MoonStar, Music2, Palette, PiggyBank, Puzzle, Shapes, Sparkles, Sprout,
+  Circle, CookingPot, Dumbbell, Flame, Footprints, Gift, GraduationCap, HandHeart, Heart, HeartPulse, House,
+  Languages, ListTodo, MoonStar, Music2, NotebookPen, Palette, PiggyBank, Pizza, Puzzle, Shapes, Sparkles, Sprout,
   Star, Sun, Target, Users, WalletCards, type LucideIcon,
 } from 'lucide-react'
 
 const icons: Record<string, LucideIcon> = {
   Apple, BookOpen, Brain, BriefcaseBusiness, CalendarCheck, CheckCircle2, ChefHat,
-  Circle, Dumbbell, Flame, Gift, GraduationCap, HandHeart, Heart, HeartPulse, House,
-  Languages, MoonStar, Music2, Palette, PiggyBank, Puzzle, Shapes, Sparkles, Sprout,
+  Circle, CookingPot, Dumbbell, Flame, Footprints, Gift, GraduationCap, HandHeart, Heart, HeartPulse, House,
+  Languages, ListTodo, MoonStar, Music2, NotebookPen, Palette, PiggyBank, Pizza, Puzzle, Shapes, Sparkles, Sprout,
   Star, Sun, Target, Users, WalletCards,
 }
 

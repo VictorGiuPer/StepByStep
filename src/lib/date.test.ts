@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bonusForStreak, calculateStreak, completionForInterval, dateKeyInTimeZone, intervalStart, isHabitDue, isoWeekday, weekStart } from './date'
+import { bonusForStreak, calculateStreak, completionForInterval, dateKeyInTimeZone, intervalStart, isHabitDue, isoWeekday, weeklyProgressCount, weekStart } from './date'
 import type { Completion, Habit, HabitSchedule } from '@/types'
 
 const habit: Habit = { id: 'habit-1', name: 'Read', icon: 'BookOpen', category_id: 'category-1', type: 'build', scope: 'personal', owner_user_id: 'user-1', frequency: 'daily', custom_days: null, size: 'small', base_points: 1, archived: false, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }
@@ -13,6 +13,14 @@ describe('household calendar rules', () => {
   it('uses ISO weekdays and Monday week starts', () => {
     expect(isoWeekday('2026-08-23')).toBe(7)
     expect(weekStart('2026-08-23')).toBe('2026-08-17')
+  })
+  it('uses only the progress row for the current Monday-Sunday week', () => {
+    const progress = [
+      { habit_id: habit.id, user_id: 'user-1', week_start: '2026-08-10', count: 5 },
+      { habit_id: habit.id, user_id: 'user-1', week_start: '2026-08-17', count: 1 },
+    ]
+    expect(weeklyProgressCount(progress, habit.id, 'user-1', '2026-08-23')).toBe(1)
+    expect(weeklyProgressCount(progress, habit.id, 'user-1', '2026-08-24')).toBe(0)
   })
   it('limits custom habits to configured weekdays', () => {
     const customHabit = { ...habit, frequency: 'custom_days' as const, custom_days: [1, 3, 5] }

@@ -1,4 +1,4 @@
-import type { Completion, Habit, HabitSchedule } from '@/types'
+import type { Completion, Habit, HabitSchedule, HabitWeeklyProgress } from '@/types'
 
 const dayMs = 86_400_000
 
@@ -32,6 +32,10 @@ export function isoWeekday(key: string): number {
 
 export function weekStart(key: string): string {
   return addDays(key, 1 - isoWeekday(key))
+}
+
+export function weeklyProgressCount(progress: HabitWeeklyProgress[], habitId: string, userId: string, date: string): number {
+  return progress.find((item) => item.habit_id === habitId && item.user_id === userId && item.week_start === weekStart(date))?.count ?? 0
 }
 
 export function formatDate(key: string, options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }): string {

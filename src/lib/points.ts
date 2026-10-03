@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { HabitInput, Redemption } from '@/types'
+import type { HabitInput, LedgerEntry, Redemption } from '@/types'
 import { isDemoMode } from './demo'
 
 export class AppServiceError extends Error {
@@ -19,9 +19,22 @@ export function friendlyError(error: unknown): AppServiceError {
     [/future completions/i, 'You cannot log a future completion.'],
     [/not enough points/i, 'There are not enough points for this reward.'],
     [/other partner must decide/i, 'Only your partner can decide your reward request.'],
-    [/referenced from table/i, 'Reassign the habits in this category before deleting it.'],
+    [/referenced from table/i, 'Reassign the habits and to-dos in this category before deleting it.'],
   ]
   return new AppServiceError(mappings.find(([pattern]) => pattern.test(source))?.[1] ?? source, candidate?.code)
+}
+
+export function netPointsByCategory(ledger: LedgerEntry[], userId: string) {
+  const grouped = ledger
+    .filter((entry) => entry.user_id === userId && entry.category_name)
+    .reduce<Record<string, number>>((result, entry) => ({
+      ...result,
+      [entry.category_name!]: (result[entry.category_name!] ?? 0) + entry.points,
+    }), {})
+  return Object.entries(grouped)
+    .map(([name, points]) => ({ name, points }))
+    .filter((item) => item.points !== 0)
+    .sort((a, b) => b.points - a.points)
 }
 
 export function habitRpcPayload(input: HabitInput) {

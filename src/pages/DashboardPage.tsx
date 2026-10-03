@@ -19,6 +19,7 @@ import {
   formatDate,
   formatFullDate,
   isHabitDue,
+  weeklyProgressCount,
 } from "@/lib/date";
 import {
   adjustWeeklyHabit,
@@ -27,6 +28,7 @@ import {
   toggleTodo,
 } from "@/lib/points";
 import { supabase } from "@/lib/supabase";
+import { activeTodoCompletion, isTodoVisibleToday } from "@/lib/todos";
 import type { AppSnapshot, Habit, Redemption } from "@/types";
 import { AppIcon } from "@/components/AppIcon";
 import { HabitCard } from "@/components/HabitCard";
@@ -88,7 +90,7 @@ function RhythmStrip({
       <div className="grid grid-cols-7 gap-1.5">
         {dates.map((date) => {
           const due = snapshot.habits.filter((habit) =>
-            isHabitDue(habit, date, userId, snapshot.schedules),
+            !habit.weekly_target && isHabitDue(habit, date, userId, snapshot.schedules),
           );
           const complete = due.filter((habit) =>
             completionForInterval(
@@ -211,7 +213,7 @@ export function DashboardPage({
   const queryClient = useQueryClient();
   const today = dateKeyInTimeZone(snapshot.settings.timezone);
   const [categoryId, setCategoryId] = useState("all");
-  const [weekStart, setWeekStart] = useState(today);
+  const [rhythmStart, setRhythmStart] = useState(today);
   const [completeError, setCompleteError] = useState("");
   const complete = useMutation({
     mutationFn: (habitId: string) =>
@@ -254,8 +256,8 @@ export function DashboardPage({
         snapshot.completions,
       ),
   ).length;
-  const todos = snapshot.todos.filter(
-    (todo) => todo.scope === "shared" || todo.owner_user_id === userId,
+  const todos = snapshot.todos.filter((todo) =>
+    isTodoVisibleToday(todo, userId, today, snapshot.todoCompletions),
   );
   const flexibleHabits = snapshot.habits.filter((habit) => !habit.archived && habit.weekly_target && (habit.scope === "shared" || habit.owner_user_id === userId));
   return (
@@ -359,7 +361,7 @@ export function DashboardPage({
           />
         )}
       </section>
-      {flexibleHabits.length > 0 && <section><div className="mb-3 flex items-center gap-2"><Flame className="text-accent" size={18} /><h2 className="font-black">This week</h2></div><div className="space-y-2">{flexibleHabits.map((habit) => { const count = snapshot.weeklyProgress.find((item) => item.habit_id === habit.id && item.user_id === userId)?.count ?? 0; const category = snapshot.categories.find((item) => item.id === habit.category_id); return <article key={habit.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2.5 shadow-soft"><span className="grid size-10 place-items-center rounded-xl text-white" style={{ backgroundColor: category?.color ?? "#758BFD" }}><AppIcon name={habit.icon} size={19} /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{habit.name}</p><p className="text-xs font-bold text-action">{count} / {habit.weekly_target} this week</p></div><Button size="icon" variant="ghost" onClick={() => weeklyAdjust.mutate({ habitId: habit.id, delta: -1 })} disabled={count === 0 || weeklyAdjust.isPending}><Minus size={17} /></Button><Button size="icon" onClick={() => weeklyAdjust.mutate({ habitId: habit.id, delta: 1 })} disabled={weeklyAdjust.isPending}><Plus size={18} /></Button></article> })}</div></section>}
+      {flexibleHabits.length > 0 && <section><div className="mb-3 flex items-center gap-2"><Flame className="text-accent" size={18} /><h2 className="font-black">This week</h2></div><div className="space-y-2">{flexibleHabits.map((habit) => { const count = weeklyProgressCount(snapshot.weeklyProgress, habit.id, userId, today); const category = snapshot.categories.find((item) => item.id === habit.category_id); return <article key={habit.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2.5 shadow-soft"><span className="grid size-10 place-items-center rounded-xl text-white" style={{ backgroundColor: category?.color ?? "#758BFD" }}><AppIcon name={habit.icon} size={19} /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{habit.name}</p><p className="text-xs font-bold text-action">{count} / {habit.weekly_target} this week</p></div><Button size="icon" variant="ghost" aria-label={`Decrease ${habit.name}`} onClick={() => weeklyAdjust.mutate({ habitId: habit.id, delta: -1 })} disabled={count === 0 || weeklyAdjust.isPending}><Minus size={17} /></Button><Button size="icon" aria-label={`Increase ${habit.name}`} onClick={() => weeklyAdjust.mutate({ habitId: habit.id, delta: 1 })} disabled={weeklyAdjust.isPending}><Plus size={18} /></Button></article> })}</div></section>}
       {todos.length > 0 && (
         <section>
           <div className="mb-3 flex items-center gap-2">
@@ -368,9 +370,9 @@ export function DashboardPage({
           </div>
           <div className="space-y-2">
             {todos.map((todo) => {
-              const complete = snapshot.todoCompletions.some(
-                (item) => item.todo_id === todo.id && item.user_id === userId,
-              );
+              const completion = activeTodoCompletion(todo.id, userId, snapshot.todoCompletions);
+              const complete = Boolean(completion);
+              const category = snapshot.categories.find((item) => item.id === todo.category_id);
               return (
                 <article
                   key={todo.id}
@@ -381,6 +383,7 @@ export function DashboardPage({
                     variant={complete ? "secondary" : "primary"}
                     onClick={() => todoToggle.mutate(todo.id)}
                     disabled={todoToggle.isPending}
+                    aria-label={complete ? `Undo ${todo.name}` : `Complete ${todo.name}`}
                   >
                     <Check size={18} />
                   </Button>
@@ -395,7 +398,7 @@ export function DashboardPage({
                       {todo.name}
                     </p>
                     <p className="text-xs font-bold text-accent">
-                      +{todo.base_points} points
+                      {category?.name ?? "Uncategorised"} · {todo.scope === "shared" ? "Shared" : "Personal"} · +{todo.base_points}
                     </p>
                   </div>
                 </article>
@@ -426,9 +429,9 @@ export function DashboardPage({
       <RhythmStrip
         snapshot={snapshot}
         userId={userId}
-        start={weekStart}
-        onPrevious={() => setWeekStart((value) => addDays(value, -7))}
-        onNext={() => setWeekStart((value) => addDays(value, 7))}
+        start={rhythmStart}
+        onPrevious={() => setRhythmStart((value) => addDays(value, -7))}
+        onNext={() => setRhythmStart((value) => addDays(value, 7))}
       />
     </div>
   );

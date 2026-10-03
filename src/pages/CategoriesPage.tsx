@@ -11,9 +11,11 @@ import {
   Trash2,
 } from "lucide-react";
 import clsx from "clsx";
+import { dateKeyInTimeZone, formatDate } from "@/lib/date";
 import { friendlyError, toggleTodo } from "@/lib/points";
 import { supabase } from "@/lib/supabase";
 import { isDemoMode } from "@/lib/demo";
+import { activeTodoCompletion, splitTodosForUser } from "@/lib/todos";
 import type { AppSnapshot, Category, Habit, Todo } from "@/types";
 import { AppIcon, iconNames } from "@/components/AppIcon";
 import { HabitModal } from "@/components/HabitModal";
@@ -196,23 +198,21 @@ function TodoModal({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const sharedArea = snapshot.categories.find(
-    (category) => category.scope === "shared",
-  );
   const [name, setName] = useState(todo?.name ?? "");
   const [size, setSize] = useState(todo?.size ?? "small");
   const [icon, setIcon] = useState(todo?.icon ?? "ListTodo");
+  const [categoryId, setCategoryId] = useState(todo?.category_id ?? snapshot.categories[0]?.id ?? "");
+  const [scope, setScope] = useState<Todo["scope"]>(todo?.scope ?? "personal");
   const [error, setError] = useState("");
+  const canEdit = !todo || todo.scope === "shared" || todo.owner_user_id === userId;
   const save = useMutation({
     mutationFn: async () => {
-      if (!sharedArea)
-        throw new Error("Connect accounts to create shared to-dos.");
       const { error: rpcError } = await supabase.rpc("save_todo", {
         p_todo_id: todo?.id ?? null,
         p_name: name.trim(),
         p_icon: icon,
-        p_category_id: sharedArea.id,
-        p_scope: "shared",
+        p_category_id: categoryId,
+        p_scope: scope,
         p_size: size,
       });
       if (rpcError) throw friendlyError(rpcError);
@@ -246,16 +246,31 @@ function TodoModal({
             className={inputClass}
             required
             maxLength={100}
+            disabled={!canEdit}
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Book the dentist"
           />
         </div>
         <div>
+          <Label htmlFor="todo-category">Category</Label>
+          <select id="todo-category" className={inputClass} disabled={!canEdit} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+            {snapshot.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label htmlFor="todo-scope">Scope</Label>
+          <select id="todo-scope" className={inputClass} disabled={!canEdit} value={scope} onChange={(event) => setScope(event.target.value as Todo["scope"])}>
+            <option value="personal">Personal</option>
+            <option value="shared">Shared</option>
+          </select>
+        </div>
+        <div>
           <Label htmlFor="todo-size">Size</Label>
           <select
             id="todo-size"
             className={inputClass}
+            disabled={!canEdit}
             value={size}
             onChange={(event) => setSize(event.target.value as Todo["size"])}
           >
@@ -269,6 +284,7 @@ function TodoModal({
           <select
             id="todo-icon"
             className={inputClass}
+            disabled={!canEdit}
             value={icon}
             onChange={(event) => setIcon(event.target.value)}
           >
@@ -278,13 +294,13 @@ function TodoModal({
           </select>
         </div>
         {error && <Notice>{error}</Notice>}
-        <Button
+        {canEdit && <Button
           type="submit"
           className="w-full"
-          disabled={!name.trim() || !sharedArea || save.isPending}
+          disabled={!name.trim() || !categoryId || save.isPending}
         >
           {save.isPending ? "Saving…" : "Save to-do"}
-        </Button>
+        </Button>}
       </form>
     </Modal>
   );
@@ -302,7 +318,9 @@ function TodoSection({
   onAdd: () => void;
 }) {
   const queryClient = useQueryClient();
+  const today = dateKeyInTimeZone(snapshot.settings.timezone);
   const [error, setError] = useState("");
+  const [view, setView] = useState<"active" | "completed">("active");
   const toggle = useMutation({
     mutationFn: (todoId: string) => toggleTodo(supabase, todoId),
     onSuccess: async () =>
@@ -320,6 +338,8 @@ function TodoSection({
       queryClient.invalidateQueries({ queryKey: ["snapshot", userId] }),
     onError: (reason) => setError((reason as Error).message),
   });
+  const grouped = splitTodosForUser(snapshot.todos, userId, snapshot.todoCompletions);
+  const visibleTodos = view === "active" ? grouped.active : grouped.completed;
   return (
     <section>
       <div className="mb-3 flex items-center justify-between">
@@ -329,34 +349,35 @@ function TodoSection({
           </p>
           <h2 className="font-black">One-off tasks</h2>
         </div>
-        <Button variant="accent" size="sm" onClick={onAdd}>
-          <Plus size={15} /> Add to-do
-        </Button>
+        <div className="flex gap-2"><Button variant={view === "completed" ? "secondary" : "ghost"} size="sm" onClick={() => setView((current) => current === "active" ? "completed" : "active")}><Archive size={15} /> {view === "active" ? "Completed" : "Active"}</Button><Button variant="accent" size="sm" onClick={onAdd}><Plus size={15} /> Add to-do</Button></div>
       </div>
       {error && (
         <div className="mb-3">
           <Notice>{error}</Notice>
         </div>
       )}
-      {snapshot.todos.length ? (
+      {visibleTodos.length ? (
         <div className="space-y-2">
-          {snapshot.todos.map((todo) => {
-            const complete = snapshot.todoCompletions.some(
-              (item) => item.todo_id === todo.id && item.user_id === userId,
-            );
+          {visibleTodos.map((todo) => {
+            const completion = activeTodoCompletion(todo.id, userId, snapshot.todoCompletions);
+            const complete = Boolean(completion);
+            const category = snapshot.categories.find((item) => item.id === todo.category_id);
+            const owner = snapshot.profiles.find((item) => item.id === todo.owner_user_id);
+            const canManage = todo.scope === "shared" || todo.owner_user_id === userId;
             return (
               <div
                 key={todo.id}
                 className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2.5 shadow-soft"
               >
-                <Button
+                {canManage && (!completion || completion.completion_date === today) && <Button
                   size="icon"
                   variant={complete ? "secondary" : "primary"}
                   onClick={() => toggle.mutate(todo.id)}
                   disabled={toggle.isPending}
+                  aria-label={complete ? `Undo ${todo.name}` : `Complete ${todo.name}`}
                 >
                   <Check size={18} />
-                </Button>
+                </Button>}
                 <div className="min-w-0 flex-1">
                   <p
                     className={
@@ -368,20 +389,22 @@ function TodoSection({
                     {todo.name}
                   </p>
                   <p className="text-xs font-bold text-accent">
-                    +{todo.base_points} points · Shared
+                    {category?.name ?? "Uncategorised"} · {todo.scope === "shared" ? "Shared" : owner?.id === userId ? "Personal · You" : `Personal · ${owner?.display_name ?? "Partner"}`} · +{todo.base_points}
+                    {completion ? ` · Completed ${formatDate(completion.completion_date)}` : ""}
                   </p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => onEdit(todo)}>
+                {canManage && <Button variant="ghost" size="sm" onClick={() => onEdit(todo)}>
                   Edit
-                </Button>
-                <Button
+                </Button>}
+                {canManage && <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => remove.mutate(todo.id)}
                   disabled={remove.isPending}
+                  aria-label={`Delete ${todo.name}`}
                 >
                   <Trash2 size={16} />
-                </Button>
+                </Button>}
               </div>
             );
           })}
@@ -389,8 +412,8 @@ function TodoSection({
       ) : (
         <EmptyState
           icon={<ListTodo />}
-          title="No to-dos yet"
-          body="Add the next one-off thing you want to get done."
+          title={view === "completed" ? "No completed to-dos" : "No active to-dos"}
+          body={view === "completed" ? "Finished one-off tasks will stay here as your archive." : "Add the next one-off thing you want to get done."}
         />
       )}
     </section>
@@ -434,8 +457,8 @@ export function CategoriesPage({
           Manage
         </h1>
         <p className="mt-1 text-sm leading-6 text-ink/55">
-          Set up your categories and habits here. Today stays focused on doing
-          them.
+          Set up your one-off tasks, habits, and categories here. Today stays
+          focused on doing them.
         </p>
       </div>
       <TodoSection
@@ -444,72 +467,6 @@ export function CategoriesPage({
         onAdd={() => setTodoModal("new")}
         onEdit={(todo) => setTodoModal(todo)}
       />
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-wider text-ink/40">
-              Categories
-            </p>
-            <h2 className="font-black">Your areas</h2>
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setCategoryModal("new")}
-          >
-            <Shapes size={15} /> Add category
-          </Button>
-        </div>
-        {snapshot.categories.length ? (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {snapshot.categories.map((category) => {
-              const count = snapshot.habits.filter(
-                (habit) => habit.category_id === category.id && !habit.archived,
-              ).length;
-              return (
-                <div
-                  key={category.id}
-                  className="flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-soft"
-                >
-                  <span
-                    className="grid size-10 place-items-center rounded-xl text-white"
-                    style={{ backgroundColor: category.color }}
-                  >
-                    <AppIcon name={category.icon} size={18} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-black">
-                      {category.name}
-                    </p>
-                    <p className="text-xs font-bold text-ink/45">
-                      {count} habit{count === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Edit ${category.name}`}
-                    onClick={() => setCategoryModal(category)}
-                  >
-                    <Edit3 size={17} />
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <EmptyState
-            icon={<Shapes />}
-            title="Create your first category"
-            body="Start with one useful area, then add habits underneath it."
-            action={
-              <Button onClick={() => setCategoryModal("new")}>
-                Add category
-              </Button>
-            }
-          />
-        )}
-      </section>
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -629,6 +586,28 @@ export function CategoriesPage({
             }
           />
         )}
+      </section>
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wider text-ink/40">Categories</p>
+            <h2 className="font-black">Your areas</h2>
+          </div>
+          <Button variant="secondary" size="sm" onClick={() => setCategoryModal("new")}><Shapes size={15} /> Add category</Button>
+        </div>
+        {snapshot.categories.length ? (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {snapshot.categories.map((category) => {
+              const habitCount = snapshot.habits.filter((habit) => habit.category_id === category.id && !habit.archived).length;
+              const todoCount = snapshot.todos.filter((todo) => todo.category_id === category.id && !todo.archived).length;
+              return <div key={category.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-soft">
+                <span className="grid size-10 place-items-center rounded-xl text-white" style={{ backgroundColor: category.color }}><AppIcon name={category.icon} size={18} /></span>
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{category.name}</p><p className="text-xs font-bold text-ink/45">{habitCount} habit{habitCount === 1 ? "" : "s"} · {todoCount} to-do{todoCount === 1 ? "" : "s"}</p></div>
+                <Button variant="ghost" size="icon" aria-label={`Edit ${category.name}`} onClick={() => setCategoryModal(category)}><Edit3 size={17} /></Button>
+              </div>;
+            })}
+          </div>
+        ) : <EmptyState icon={<Shapes />} title="Create your first category" body="Start with one useful area, then add habits and to-dos underneath it." action={<Button onClick={() => setCategoryModal("new")}>Add category</Button>} />}
       </section>
       <CategoryModal
         open={categoryModal !== null}

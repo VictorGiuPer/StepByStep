@@ -1,12 +1,10 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Archive, CalendarCheck, Check, Flame, Save } from 'lucide-react'
-import { dateKeyInTimeZone, formatDate, intervalStart, isScheduledDate, resolveSchedule } from '@/lib/date'
-import { logCompletion, saveHabit } from '@/lib/points'
+import { Archive, Flame, Save } from 'lucide-react'
+import { saveHabit } from '@/lib/points'
 import { supabase } from '@/lib/supabase'
 import type { AppSnapshot, Habit, HabitFrequency, HabitInput, HabitScope, HabitSize, HabitType } from '@/types'
 import { AppIcon, iconNames } from './AppIcon'
-import { MonthCalendar } from './MonthCalendar'
 import { Button, inputClass, Label, Modal, Notice } from './ui'
 
 const weekdays = [{ value: 1, label: 'Mon' }, { value: 2, label: 'Tue' }, { value: 3, label: 'Wed' }, { value: 4, label: 'Thu' }, { value: 5, label: 'Fri' }, { value: 6, label: 'Sat' }, { value: 7, label: 'Sun' }]
@@ -22,46 +20,24 @@ interface HabitModalProps { open: boolean; onClose: () => void; habit: Habit | n
 
 function HabitModalContent({ open, onClose, habit, snapshot, userId, initialCategoryId }: HabitModalProps) {
   const queryClient = useQueryClient()
-  const today = dateKeyInTimeZone(snapshot.settings.timezone)
   const defaultCategory = habit?.category_id ?? initialCategoryId ?? snapshot.categories[0]?.id ?? ''
   const [form, setForm] = useState<HabitInput>(() => initialInput(habit, defaultCategory))
-  const [selectedDate, setSelectedDate] = useState(today)
-  const [note, setNote] = useState('')
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
   const canEdit = !habit || habit.scope === 'shared' || habit.owner_user_id === userId
-  const canComplete = !habit || habit.scope === 'shared' || habit.owner_user_id === userId
 
-  const history = useMemo(() => snapshot.completions.filter((item) => item.habit_id === habit?.id && item.user_id === userId), [habit?.id, snapshot.completions, userId])
-  const streak = snapshot.streaks.find((item) => item.habit_id === habit?.id)?.current_streak ?? 0
-  const selectedSchedule = habit ? resolveSchedule(habit.id, selectedDate, snapshot.schedules) : undefined
-  const existing = history.find((item) => selectedSchedule && item.schedule_version_id === selectedSchedule.id && item.interval_start === intervalStart(selectedSchedule, selectedDate))
+  const history = useMemo(() => snapshot.completions.filter((item) => item.habit_id === habit?.id && item.user_id === userId && !item.voided_at), [habit?.id, snapshot.completions, userId])
+  const streak = snapshot.streaks.find((item) => item.habit_id === habit?.id && item.user_id === userId)?.current_streak ?? 0
 
   const saveMutation = useMutation({
     mutationFn: () => saveHabit(supabase, form),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['snapshot', userId] }); onClose() },
     onError: (reason) => setError((reason as Error).message),
   })
-  const completionMutation = useMutation({
-    mutationFn: () => logCompletion(supabase, habit!.id, selectedDate, note),
-    onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: ['snapshot', userId] })
-      setSuccess(`Logged for ${formatDate(selectedDate)} · +${Number(result?.base_points_awarded ?? 0) + Number(result?.streak_bonus_awarded ?? 0)} points`)
-    },
-    onError: (reason) => setError((reason as Error).message),
-  })
-
   const submit = (event: FormEvent) => { event.preventDefault(); setError(''); saveMutation.mutate() }
   const set = <K extends keyof HabitInput>(key: K, value: HabitInput[K]) => setForm((current) => ({ ...current, [key]: value }))
-  const disabledDate = (date: string) => {
-    if (!habit || date > today) return true
-    const schedule = resolveSchedule(habit.id, date, snapshot.schedules)
-    if (!schedule || !isScheduledDate(schedule, date)) return true
-    return history.some((item) => item.schedule_version_id === schedule.id && item.interval_start === intervalStart(schedule, date))
-  }
 
-  return <Modal open={open} onClose={onClose} title={habit ? habit.name : 'Add a new habit'} description={habit ? 'History, past entries, and every editable field live together here.' : 'Create a small, clear action you can return to consistently.'} size="lg">
-    <div className={`grid gap-6 ${habit ? 'lg:grid-cols-[1.05fr_.95fr]' : ''}`}>
+  return <Modal open={open} onClose={onClose} title={habit ? habit.name : 'Add a new habit'} description={habit ? 'Keep the routine simple and adjust what matters.' : 'Create a small, clear action you can return to consistently.'} size="lg">
+    <div className="mx-auto max-w-2xl">
       <form className="rounded-[26px] bg-white p-5 shadow-soft" onSubmit={submit}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2"><Label htmlFor="habit-name">Name</Label><input id="habit-name" className={inputClass} required maxLength={100} disabled={!canEdit} value={form.name} onChange={(event) => set('name', event.target.value)} placeholder={form.type === 'avoid' ? 'No late-night snacks' : 'Morning stretch'} /></div>
@@ -77,13 +53,8 @@ function HabitModalContent({ open, onClose, habit, snapshot, userId, initialCate
         </div>
         {error && <div className="mt-4"><Notice>{error}</Notice></div>}
         {canEdit && <Button type="submit" className="mt-5 w-full" disabled={!form.name.trim() || !form.categoryId || (form.frequency === 'custom_days' && form.customDays.length === 0) || (form.frequency === 'flexible_weekly' && (!form.weeklyTarget || form.weeklyTarget < 1 || form.weeklyTarget > 7)) || saveMutation.isPending}><Save size={17} /> {saveMutation.isPending ? 'Saving…' : habit ? 'Save habit' : 'Create habit'}</Button>}
+        {habit && <div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-3xl bg-ink p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-white/50">Current streak</p><p className="mt-2 flex items-center gap-2 text-3xl font-black"><Flame className="text-accent" fill="currentColor" /> {streak}</p></div><div className="rounded-3xl bg-surface p-4"><p className="text-[10px] font-black uppercase tracking-wider text-ink/45">Completions</p><p className="mt-2 text-3xl font-black">{history.length}</p></div></div>}
       </form>
-
-      {habit && <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3"><div className="rounded-3xl bg-ink p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-white/50">Current streak</p><p className="mt-2 flex items-center gap-2 text-3xl font-black"><Flame className="text-accent" fill="currentColor" /> {streak}</p></div><div className="rounded-3xl bg-surface p-4"><p className="text-[10px] font-black uppercase tracking-wider text-ink/45">Completions</p><p className="mt-2 text-3xl font-black">{history.length}</p></div></div>
-        <div className="rounded-[26px] bg-white p-4 shadow-soft"><MonthCalendar dates={history.map((item) => item.date)} initialDate={today} selectedDate={selectedDate} onSelect={setSelectedDate} disabledDate={disabledDate} /></div>
-        <div className="rounded-[26px] bg-white p-4 shadow-soft"><div className="mb-3 flex items-center gap-2"><CalendarCheck className="text-action" size={18} /><h3 className="font-black">Log {formatDate(selectedDate)}</h3></div>{canComplete ? <><Label htmlFor="completion-note">Note (optional)</Label><textarea id="completion-note" className={`${inputClass} min-h-20 resize-none`} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} placeholder="A little context for future you…" />{success && <div className="mt-3"><Notice tone="success">{success}</Notice></div>}<Button className="mt-3 w-full" variant="accent" disabled={completionMutation.isPending || Boolean(existing) || disabledDate(selectedDate)} onClick={() => { setError(''); setSuccess(''); completionMutation.mutate() }}><Check size={17} /> {completionMutation.isPending ? 'Logging…' : habit.type === 'avoid' ? 'Stayed clean' : 'Log completion'}</Button></> : <p className="text-sm leading-6 text-ink/50">This is your partner’s personal habit. You can cheer it on, but only they can log or edit it.</p>}</div>
-      </div>}
     </div>
   </Modal>
 }
