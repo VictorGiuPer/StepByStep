@@ -342,14 +342,20 @@ function TodoSection({
   const visibleTodos = view === "active" ? grouped.active : grouped.completed;
   return (
     <section>
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-wider text-ink/40">
-            To-dos
-          </p>
-          <h2 className="font-black">One-off tasks</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-black sm:text-2xl">To-dos</h2>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            variant={view === "completed" ? "secondary" : "ghost"}
+            size="icon"
+            onClick={() => setView((current) => current === "active" ? "completed" : "active")}
+            aria-label={view === "active" ? "Show completed to-dos" : "Show active to-dos"}
+            title={view === "active" ? "Show completed to-dos" : "Show active to-dos"}
+          >
+            <Archive size={17} />
+          </Button>
+          <Button variant="accent" size="sm" onClick={onAdd}><Plus size={15} /> Add to-do</Button>
         </div>
-        <div className="flex gap-2"><Button variant={view === "completed" ? "secondary" : "ghost"} size="sm" onClick={() => setView((current) => current === "active" ? "completed" : "active")}><Archive size={15} /> {view === "active" ? "Completed" : "Active"}</Button><Button variant="accent" size="sm" onClick={onAdd}><Plus size={15} /> Add to-do</Button></div>
       </div>
       {error && (
         <div className="mb-3">
@@ -469,24 +475,20 @@ export function CategoriesPage({
       />
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-wider text-ink/40">
-              Habits
-            </p>
-            <h2 className="font-black">Edit your routines</h2>
-          </div>
-          <div className="flex gap-2">
+          <h2 className="text-xl font-black sm:text-2xl">Habits</h2>
+          <div className="flex shrink-0 items-center gap-2">
             <Button
               variant={habitState === "archived" ? "secondary" : "ghost"}
-              size="sm"
+              size="icon"
               onClick={() =>
                 setHabitState((value) =>
                   value === "active" ? "archived" : "active",
                 )
               }
+              aria-label={habitState === "active" ? "Show archived habits" : "Show active habits"}
+              title={habitState === "active" ? "Show archived habits" : "Show active habits"}
             >
-              <Archive size={15} />{" "}
-              {habitState === "archived" ? "Active habits" : "Archived"}
+              <Archive size={17} />
             </Button>
             <Button
               variant="accent"
@@ -588,11 +590,8 @@ export function CategoriesPage({
         )}
       </section>
       <section>
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-wider text-ink/40">Categories</p>
-            <h2 className="font-black">Your areas</h2>
-          </div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-black sm:text-2xl">Categories</h2>
           <Button variant="secondary" size="sm" onClick={() => setCategoryModal("new")}><Shapes size={15} /> Add category</Button>
         </div>
         {snapshot.categories.length ? (

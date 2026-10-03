@@ -212,7 +212,6 @@ export function DashboardPage({
 }) {
   const queryClient = useQueryClient();
   const today = dateKeyInTimeZone(snapshot.settings.timezone);
-  const [categoryId, setCategoryId] = useState("all");
   const [rhythmStart, setRhythmStart] = useState(today);
   const [completeError, setCompleteError] = useState("");
   const complete = useMutation({
@@ -237,10 +236,9 @@ export function DashboardPage({
       snapshot.habits.filter(
         (habit) =>
           !habit.weekly_target &&
-          isHabitDue(habit, today, userId, snapshot.schedules) &&
-          (categoryId === "all" || habit.category_id === categoryId),
+          isHabitDue(habit, today, userId, snapshot.schedules),
       ),
-    [categoryId, snapshot.habits, snapshot.schedules, today, userId],
+    [snapshot.habits, snapshot.schedules, today, userId],
   );
   const pendingIncoming = snapshot.redemptions.filter(
     (item) =>
@@ -277,39 +275,6 @@ export function DashboardPage({
       </div>
       {completeError && <Notice>{completeError}</Notice>}
       <section className="min-h-[18rem]">
-        <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-          <button
-            onClick={() => setCategoryId("all")}
-            className={clsx(
-              "shrink-0 rounded-xl px-3 py-2 text-xs font-black",
-              categoryId === "all"
-                ? "bg-action text-white shadow-action"
-                : "bg-white text-ink/50",
-            )}
-          >
-            All
-          </button>
-          {snapshot.categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => setCategoryId(category.id)}
-              className={clsx(
-                "flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black",
-                categoryId === category.id
-                  ? "text-white shadow-action"
-                  : "bg-white text-ink/50",
-              )}
-              style={
-                categoryId === category.id
-                  ? { backgroundColor: category.color }
-                  : undefined
-              }
-            >
-              <AppIcon name={category.icon} size={14} />
-              {category.name}
-            </button>
-          ))}
-        </div>
         {dueHabits.length ? (
           <div className="space-y-2">
             {dueHabits.map((habit: Habit) => {
