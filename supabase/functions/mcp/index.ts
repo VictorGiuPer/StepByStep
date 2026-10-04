@@ -60,6 +60,7 @@ function firstRow(data: any) {
 }
 
 const writeDescription = (description: string) => `${description} This changes StepByStep. Only call after the user explicitly approves this specific change; if Claude does not show a confirmation prompt, ask before calling.`
+const categoryLabel = (category: any) => category ? `${category.name}${category.scope === 'shared' ? ' (S)' : ''}` : null
 
 Deno.serve(
   pipeline(
@@ -96,7 +97,9 @@ Deno.serve(
               runQuery(supabase.from('rewards').select('id,name,description,point_cost,icon,created_by,archived,created_at').order('created_at', { ascending: false })),
               runQuery(supabase.from('redemptions').select('id,reward_id,reward_name_snapshot,point_cost_snapshot,redeemed_by,date_requested,date_confirmed,date_decided,decided_by,decision_note,status,created_at').order('created_at', { ascending: false }).limit(50)),
             ])
-            return result({ today, week_start: weekStart, signed_in_user_id: userId, profiles, connection: firstRow(connection), timezone: settings.timezone, categories, habits, todos, todo_completions: completions, current_week_progress: weekly, balances, recent_points: ledger, rewards, redemptions })
+            const categoryById = new Map((categories ?? []).map((category: any) => [category.id, category]))
+            const recentPoints = (ledger ?? []).map((entry: any) => ({ ...entry, category_name: categoryLabel(categoryById.get(entry.category_id)) ?? entry.category_name }))
+            return result({ today, week_start: weekStart, signed_in_user_id: userId, profiles, connection: firstRow(connection), timezone: settings.timezone, categories: (categories ?? []).map((category: any) => ({ ...category, name: categoryLabel(category) })), habits, todos, todo_completions: completions, current_week_progress: weekly, balances, recent_points: recentPoints, rewards, redemptions })
           },
         )
 
@@ -110,7 +113,7 @@ Deno.serve(
           },
           async () => {
             const data = await runQuery(supabase.from('categories').select('id,name,icon,color,sort_order,scope,owner_user_id').order('sort_order', { ascending: true }).order('name', { ascending: true }))
-            return result(data ?? [])
+            return result((data ?? []).map((category: any) => ({ ...category, name: categoryLabel(category) })))
           },
         )
 
@@ -127,13 +130,13 @@ Deno.serve(
             const [todos, completions, categories, profiles] = await Promise.all([
               runQuery(supabase.from('todos').select('id,name,icon,category_id,scope,owner_user_id,size,base_points,archived,created_at').eq('archived', false).order('created_at')),
               runQuery(supabase.from('todo_completions').select('todo_id,user_id,completion_date,completed_at,voided_at')),
-              runQuery(supabase.from('categories').select('id,name')),
+              runQuery(supabase.from('categories').select('id,name,scope')),
               runQuery(supabase.from('profiles').select('id,display_name')),
             ])
             const active = (completions ?? []).filter((item: any) => !item.voided_at)
             const ownDone = new Set(active.filter((item: any) => item.user_id === userId).map((item: any) => item.todo_id))
             const filtered = (todos ?? []).filter((todo: any) => view === 'all' || (view === 'completed' ? ownDone.has(todo.id) : !ownDone.has(todo.id)))
-            const output = filtered.map((todo: any) => ({ ...todo, category: (categories ?? []).find((item: any) => item.id === todo.category_id)?.name ?? null, owner: (profiles ?? []).find((item: any) => item.id === todo.owner_user_id)?.display_name ?? null, completed_by: active.filter((item: any) => item.todo_id === todo.id).map((item: any) => ({ user_id: item.user_id, name: (profiles ?? []).find((profile: any) => profile.id === item.user_id)?.display_name ?? null, completion_date: item.completion_date })) }))
+            const output = filtered.map((todo: any) => ({ ...todo, category: categoryLabel((categories ?? []).find((item: any) => item.id === todo.category_id)), owner: (profiles ?? []).find((item: any) => item.id === todo.owner_user_id)?.display_name ?? null, completed_by: active.filter((item: any) => item.todo_id === todo.id).map((item: any) => ({ user_id: item.user_id, name: (profiles ?? []).find((profile: any) => profile.id === item.user_id)?.display_name ?? null, completion_date: item.completion_date })) }))
             return result({ view, tasks: output })
           },
         )
@@ -156,11 +159,11 @@ Deno.serve(
               runQuery(supabase.from('habit_schedule_versions').select('id,habit_id,frequency,custom_days,effective_from,effective_to').order('effective_from')),
               runQuery(supabase.from('habit_completions').select('id,habit_id,schedule_version_id,user_id,date,interval_start,note,voided_at,created_at').order('date', { ascending: false }).limit(200)),
               runQuery(supabase.from('habit_weekly_progress').select('habit_id,user_id,week_start,count').eq('week_start', weekStart)),
-              runQuery(supabase.from('categories').select('id,name')),
+              runQuery(supabase.from('categories').select('id,name,scope')),
               runQuery(supabase.from('profiles').select('id,display_name')),
             ])
             const streakGroups = await Promise.all((profiles ?? []).map((profile: any) => runRpc(supabase, 'get_habit_streaks', { p_user_id: profile.id })))
-            return result({ today, week_start: weekStart, habits: (habits ?? []).map((habit: any) => ({ ...habit, category: (categories ?? []).find((item: any) => item.id === habit.category_id)?.name ?? null, owner: (profiles ?? []).find((item: any) => item.id === habit.owner_user_id)?.display_name ?? null })), schedules, recent_completions: completions, current_week_progress: weekly, streaks: streakGroups.flatMap((group: any) => group ?? []) })
+            return result({ today, week_start: weekStart, habits: (habits ?? []).map((habit: any) => ({ ...habit, category: categoryLabel((categories ?? []).find((item: any) => item.id === habit.category_id)), owner: (profiles ?? []).find((item: any) => item.id === habit.owner_user_id)?.display_name ?? null })), schedules, recent_completions: completions, current_week_progress: weekly, streaks: streakGroups.flatMap((group: any) => group ?? []) })
           },
         )
 
@@ -173,14 +176,17 @@ Deno.serve(
             annotations: { readOnlyHint: true },
           },
           async ({ history_limit }) => {
-            const [balances, ledger, rewards, redemptions, profiles] = await Promise.all([
+            const [balances, ledger, rewards, redemptions, profiles, categories] = await Promise.all([
               runQuery(supabase.from('point_balances').select('user_id,balance')),
               runQuery(supabase.from('ledger_history').select('id,user_id,date,points,source,created_at,habit_id,habit_name,category_id,category_name,reward_name').order('created_at', { ascending: false }).limit(history_limit)),
               runQuery(supabase.from('rewards').select('id,name,description,point_cost,icon,created_by,archived,created_at').order('created_at', { ascending: false })),
               runQuery(supabase.from('redemptions').select('id,reward_id,reward_name_snapshot,point_cost_snapshot,redeemed_by,date_requested,date_confirmed,date_decided,decided_by,decision_note,status,created_at').order('created_at', { ascending: false }).limit(history_limit)),
               runQuery(supabase.from('profiles').select('id,display_name')),
+              runQuery(supabase.from('categories').select('id,name,scope')),
             ])
-            return result({ profiles, balances, points: ledger, rewards, redemptions })
+            const categoryById = new Map((categories ?? []).map((category: any) => [category.id, category]))
+            const points = (ledger ?? []).map((entry: any) => ({ ...entry, category_name: categoryLabel(categoryById.get(entry.category_id)) ?? entry.category_name }))
+            return result({ profiles, balances, points, rewards, redemptions })
           },
         )
 
@@ -333,7 +339,7 @@ Deno.serve(
           'save_category',
           {
             title: 'Add or edit a category',
-            description: writeDescription('Create or edit a shared category label used to organize tasks and habits. Categories are labels; they do not change whether an item is personal or shared.'),
+            description: writeDescription('Create or edit a category label used to organize tasks and habits. New categories are personal; saving a habit or task as shared will automatically share its category.'),
             inputSchema: z.object({ id: z.uuid().optional(), name: z.string().trim().min(1).max(60).optional(), icon: z.string().trim().min(1).max(40).optional(), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), sort_order: z.number().int().min(0).optional() }),
             annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
           },
@@ -341,13 +347,14 @@ Deno.serve(
             if (id) {
               const patch = { ...(name === undefined ? {} : { name }), ...(icon === undefined ? {} : { icon }), ...(color === undefined ? {} : { color }), ...(sort_order === undefined ? {} : { sort_order }) }
               if (!Object.keys(patch).length) throw new Error('Provide at least one category field to change.')
-              return result(await runQuery(supabase.from('categories').update(patch).eq('id', id).select('id,name,icon,color,sort_order').single()))
+              const category = await runQuery(supabase.from('categories').update(patch).eq('id', id).select('id,name,icon,color,sort_order,scope,owner_user_id').single())
+              return result({ ...category, name: categoryLabel(category) })
             }
             if (!name) throw new Error('Provide a category name when creating a category.')
             const userId = await actorId(supabase)
             const membership = await runQuery(supabase.from('couple_members').select('couple_id').eq('user_id', userId).single())
-            const category = await runQuery(supabase.from('categories').insert({ couple_id: membership.couple_id, name, icon: icon ?? 'Shapes', color: color ?? '#758BFD', sort_order: sort_order ?? 0, scope: 'shared', owner_user_id: null, created_by: userId }).select('id,name,icon,color,sort_order').single())
-            return result(category)
+            const category = await runQuery(supabase.from('categories').insert({ couple_id: membership.couple_id, name, icon: icon ?? 'Shapes', color: color ?? '#758BFD', sort_order: sort_order ?? 0, scope: 'personal', owner_user_id: userId, created_by: userId }).select('id,name,icon,color,sort_order,scope,owner_user_id').single())
+            return result({ ...category, name: categoryLabel(category) })
           },
         )
 

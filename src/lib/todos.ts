@@ -16,6 +16,7 @@ export function isTodoVisibleToday(todo: Todo, userId: string, today: string, co
 
 export function splitTodosForUser(todos: Todo[], userId: string, completions: TodoCompletion[]) {
   return todos.reduce<{ active: Todo[]; completed: Todo[] }>((result, todo) => {
+    if (!isTodoAvailableToUser(todo, userId)) return result
     if (activeTodoCompletion(todo.id, userId, completions)) result.completed.push(todo)
     else result.active.push(todo)
     return result

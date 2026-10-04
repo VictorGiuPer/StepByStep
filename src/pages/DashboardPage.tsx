@@ -29,6 +29,7 @@ import {
 } from "@/lib/points";
 import { supabase } from "@/lib/supabase";
 import { activeTodoCompletion, isTodoVisibleToday } from "@/lib/todos";
+import { categoryLabel } from "@/lib/categories";
 import type { AppSnapshot, Habit, Redemption } from "@/types";
 import { AppIcon } from "@/components/AppIcon";
 import { HabitCard } from "@/components/HabitCard";
@@ -363,7 +364,7 @@ export function DashboardPage({
                       {todo.name}
                     </p>
                     <p className="text-xs font-bold text-accent">
-                      {category?.name ?? "Uncategorised"} · {todo.scope === "shared" ? "Shared" : "Personal"} · +{todo.base_points}
+                      {category ? categoryLabel(category) : "Uncategorised"} · {todo.scope === "shared" ? "Shared" : "Personal"} · +{todo.base_points}
                     </p>
                   </div>
                 </article>

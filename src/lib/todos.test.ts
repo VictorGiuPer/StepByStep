@@ -30,5 +30,6 @@ describe('to-do lifecycle views', () => {
     const voided = completion({ voided_at: '2026-10-03T11:00:00Z', voided_by: 'user-1' })
     expect(activeTodoCompletion(personal.id, 'user-1', [voided])).toBeUndefined()
     expect(isTodoVisibleToday(personal, 'user-2', '2026-10-03', [])).toBe(false)
+    expect(splitTodosForUser([personal], 'user-2', []).active).toHaveLength(0)
   })
 })

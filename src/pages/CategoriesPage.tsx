@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { dateKeyInTimeZone, formatDate } from "@/lib/date";
+import { categoryLabel } from "@/lib/categories";
 import { friendlyError, toggleTodo } from "@/lib/points";
 import { supabase } from "@/lib/supabase";
 import { isDemoMode } from "@/lib/demo";
@@ -54,6 +55,8 @@ function CategoryModalContent({
         name: name.trim(),
         icon,
         color,
+        scope: category ? category.scope ?? "personal" : "personal",
+        owner_user_id: category ? category.owner_user_id : userId,
         sort_order:
           category?.sort_order ??
           Math.max(0, ...snapshot.categories.map((item) => item.sort_order)) +
@@ -95,7 +98,7 @@ function CategoryModalContent({
       open={open}
       onClose={onClose}
       title={category ? "Edit category" : "Add category"}
-      description="A simple label for the habits you want to manage together."
+      description="Categories are private by default. Using one for a shared habit or to-do makes it shared."
       size="sm"
     >
       <form
@@ -255,7 +258,7 @@ function TodoModal({
         <div>
           <Label htmlFor="todo-category">Category</Label>
           <select id="todo-category" className={inputClass} disabled={!canEdit} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
-            {snapshot.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+          {snapshot.categories.map((category) => <option key={category.id} value={category.id}>{categoryLabel(category)}</option>)}
           </select>
         </div>
         <div>
@@ -395,7 +398,7 @@ function TodoSection({
                     {todo.name}
                   </p>
                   <p className="text-xs font-bold text-accent">
-                    {category?.name ?? "Uncategorised"} · {todo.scope === "shared" ? "Shared" : owner?.id === userId ? "Personal · You" : `Personal · ${owner?.display_name ?? "Partner"}`} · +{todo.base_points}
+                    {category ? categoryLabel(category) : "Uncategorised"} · {todo.scope === "shared" ? "Shared" : owner?.id === userId ? "Personal · You" : `Personal · ${owner?.display_name ?? "Partner"}`} · +{todo.base_points}
                     {completion ? ` · Completed ${formatDate(completion.completion_date)}` : ""}
                   </p>
                 </div>
@@ -527,7 +530,7 @@ export function CategoriesPage({
                   : undefined
               }
             >
-              {category.name}
+              {categoryLabel(category)}
             </button>
           ))}
         </div>
@@ -554,7 +557,7 @@ export function CategoriesPage({
                       {habit.name}
                     </span>
                     <span className="mt-0.5 block text-[11px] font-bold text-ink/45">
-                      {category?.name} · {scheduleLabel(habit)} · +
+                      {category ? categoryLabel(category) : "Uncategorised"} · {scheduleLabel(habit)} · +
                       {habit.base_points}
                     </span>
                   </span>
@@ -601,8 +604,8 @@ export function CategoriesPage({
               const todoCount = snapshot.todos.filter((todo) => todo.category_id === category.id && !todo.archived).length;
               return <div key={category.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-soft">
                 <span className="grid size-10 place-items-center rounded-xl text-white" style={{ backgroundColor: category.color }}><AppIcon name={category.icon} size={18} /></span>
-                <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{category.name}</p><p className="text-xs font-bold text-ink/45">{habitCount} habit{habitCount === 1 ? "" : "s"} · {todoCount} to-do{todoCount === 1 ? "" : "s"}</p></div>
-                <Button variant="ghost" size="icon" aria-label={`Edit ${category.name}`} onClick={() => setCategoryModal(category)}><Edit3 size={17} /></Button>
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{categoryLabel(category)}</p><p className="text-xs font-bold text-ink/45">{habitCount} habit{habitCount === 1 ? "" : "s"} · {todoCount} to-do{todoCount === 1 ? "" : "s"}</p></div>
+                <Button variant="ghost" size="icon" aria-label={`Edit ${categoryLabel(category)}`} onClick={() => setCategoryModal(category)}><Edit3 size={17} /></Button>
               </div>;
             })}
           </div>

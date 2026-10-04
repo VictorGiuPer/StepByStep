@@ -12,9 +12,9 @@ export function createDemoSnapshot(): AppSnapshot {
   const today = dateKeyInTimeZone('Europe/Brussels')
   const day = (offset: number) => addDays(today, offset)
   const categories: Category[] = [
-    { id: 'c-health', name: 'Health & Body', icon: 'Dumbbell', color: '#758BFD', sort_order: 1, created_by: null },
-    { id: 'c-mind', name: 'Mind & Reflection', icon: 'Brain', color: '#FF8600', sort_order: 2, created_by: null },
-    { id: 'c-home', name: 'Home & Life Admin', icon: 'House', color: '#27187E', sort_order: 3, created_by: null },
+    { id: 'c-health', name: 'Health & Body', icon: 'Dumbbell', color: '#758BFD', sort_order: 1, created_by: null, scope: 'shared', owner_user_id: null },
+    { id: 'c-mind', name: 'Mind & Reflection', icon: 'Brain', color: '#FF8600', sort_order: 2, created_by: DEMO_USER_ID, scope: 'personal', owner_user_id: DEMO_USER_ID },
+    { id: 'c-home', name: 'Home & Life Admin', icon: 'House', color: '#27187E', sort_order: 3, created_by: null, scope: 'shared', owner_user_id: null },
   ]
   const habit = (value: Omit<Habit, 'created_at' | 'updated_at'>): Habit => ({ ...value, created_at: `${day(-35)}T09:00:00Z`, updated_at: `${today}T08:00:00Z` })
   const habits: Habit[] = [

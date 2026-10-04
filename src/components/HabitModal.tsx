@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Archive, Flame, Save } from 'lucide-react'
 import { saveHabit } from '@/lib/points'
+import { categoryLabel } from '@/lib/categories'
 import { supabase } from '@/lib/supabase'
 import type { AppSnapshot, Habit, HabitFrequency, HabitInput, HabitScope, HabitSize, HabitType } from '@/types'
 import { AppIcon, iconNames } from './AppIcon'
@@ -42,7 +43,7 @@ function HabitModalContent({ open, onClose, habit, snapshot, userId, initialCate
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2"><Label htmlFor="habit-name">Name</Label><input id="habit-name" className={inputClass} required maxLength={100} disabled={!canEdit} value={form.name} onChange={(event) => set('name', event.target.value)} placeholder={form.type === 'avoid' ? 'No late-night snacks' : 'Morning stretch'} /></div>
           <div><Label htmlFor="habit-icon">Icon</Label><div className="flex gap-2"><span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-surface/50 text-action"><AppIcon name={form.icon} /></span><select id="habit-icon" className={inputClass} disabled={!canEdit} value={form.icon} onChange={(event) => set('icon', event.target.value)}>{iconNames.map((name) => <option key={name}>{name}</option>)}</select></div></div>
-          <div><Label htmlFor="habit-category">Category</Label><select id="habit-category" className={inputClass} disabled={!canEdit} value={form.categoryId} onChange={(event) => set('categoryId', event.target.value)}>{snapshot.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
+          <div><Label htmlFor="habit-category">Category</Label><select id="habit-category" className={inputClass} disabled={!canEdit} value={form.categoryId} onChange={(event) => set('categoryId', event.target.value)}>{snapshot.categories.map((category) => <option key={category.id} value={category.id}>{categoryLabel(category)}</option>)}</select></div>
           <div><Label htmlFor="habit-type">Type</Label><select id="habit-type" className={inputClass} disabled={!canEdit} value={form.type} onChange={(event) => set('type', event.target.value as HabitType)}><option value="build">Build — do the thing</option><option value="avoid">Avoid — stay clean</option></select></div>
           <div><Label htmlFor="habit-scope">Scope</Label><select id="habit-scope" className={inputClass} disabled={!canEdit} value={form.scope} onChange={(event) => set('scope', event.target.value as HabitScope)}><option value="personal">Personal</option><option value="shared">Shared</option></select></div>
           <div><Label htmlFor="habit-frequency">Frequency</Label><select id="habit-frequency" className={inputClass} disabled={!canEdit} value={form.frequency} onChange={(event) => set('frequency', event.target.value as HabitFrequency)}><option value="daily">Daily</option><option value="weekly">Once a week</option><option value="custom_days">Times per week (choose days)</option><option value="flexible_weekly">Flexible weekly target</option></select></div>

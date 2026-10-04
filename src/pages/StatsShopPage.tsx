@@ -5,6 +5,7 @@ import { Check, Clock3, Edit3, Flame, Gift, Plus, ShoppingBag, Sparkles, X } fro
 import clsx from 'clsx'
 import { addDays, dateKeyInTimeZone, formatDate } from '@/lib/date'
 import { decideRedemption, friendlyError, netPointsByCategory, requestRedemption } from '@/lib/points'
+import { categoryLabel } from '@/lib/categories'
 import { supabase } from '@/lib/supabase'
 import { isDemoMode } from '@/lib/demo'
 import type { AppSnapshot, Redemption, Reward } from '@/types'
@@ -63,8 +64,12 @@ export function StatsShopPage({ snapshot, userId, onPreviewRequest, onPreviewDec
     }, { balance: initialBalance, rows: [] }).rows
   }, [range, selectedMemberId, snapshot.ledger, today])
   const categoryData = useMemo(() => {
-    return netPointsByCategory(snapshot.ledger, selectedMemberId)
-  }, [selectedMemberId, snapshot.ledger])
+    const entries = snapshot.ledger.map((entry) => {
+      const category = snapshot.categories.find((item) => item.id === entry.category_id)
+      return category ? { ...entry, category_name: categoryLabel(category) } : entry
+    })
+    return netPointsByCategory(entries, selectedMemberId)
+  }, [selectedMemberId, snapshot.categories, snapshot.ledger])
   const incoming = snapshot.redemptions.filter((item) => item.status === 'pending_confirmation' && item.redeemed_by !== userId)
   const outgoing = snapshot.redemptions.filter((item) => item.status === 'pending_confirmation' && item.redeemed_by === userId)
   const history = snapshot.redemptions.filter((item) => item.status !== 'pending_confirmation')

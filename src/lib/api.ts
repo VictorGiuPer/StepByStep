@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from './supabase'
+import { isCategoryAvailableToUser } from './categories'
+import { isHabitAvailableToUser } from './date'
+import { isTodoAvailableToUser } from './todos'
 import type { AppSettings, AppSnapshot, Category, Completion, CoupleConnection, FeedEntry, Habit, HabitSchedule, HabitStreak, HabitWeeklyProgress, LedgerEntry, PointBalance, Profile, Redemption, Reward, Todo, TodoCompletion } from '@/types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
@@ -33,25 +36,31 @@ export async function loadSnapshot(userId: string): Promise<AppSnapshot> {
   ])
   const streaks = streakGroups.flatMap((result) => unwrap(result) as HabitStreak[])
   const pointBalances = (unwrap(balances) as Array<{ user_id: string; balance: number | string }>).map((item) => ({ user_id: item.user_id, balance: Number(item.balance) }))
+  const visibleCategories = (unwrap(categories) as Category[]).filter((category) => isCategoryAvailableToUser(category, userId))
+  const visibleHabits = (unwrap(habits) as Habit[]).filter((habit) => isHabitAvailableToUser(habit, userId))
+  const visibleTodos = (unwrap(todos) as Todo[]).filter((todo) => isTodoAvailableToUser(todo, userId))
+  const visibleHabitIds = new Set(visibleHabits.map((habit) => habit.id))
+  const sharedHabitIds = new Set(visibleHabits.filter((habit) => habit.scope === 'shared').map((habit) => habit.id))
+  const visibleTodoIds = new Set(visibleTodos.map((todo) => todo.id))
 
   return {
     profiles: visibleProfiles,
     settings: unwrap(settings) as AppSettings,
-    categories: unwrap(categories) as Category[],
-    habits: unwrap(habits) as Habit[],
-    todos: unwrap(todos) as Todo[],
-    todoCompletions: unwrap(todoCompletions) as TodoCompletion[],
-    weeklyProgress: unwrap(weeklyProgress) as HabitWeeklyProgress[],
-    schedules: unwrap(schedules) as HabitSchedule[],
-    completions: unwrap(completions) as Completion[],
+    categories: visibleCategories,
+    habits: visibleHabits,
+    todos: visibleTodos,
+    todoCompletions: (unwrap(todoCompletions) as TodoCompletion[]).filter((item) => visibleTodoIds.has(item.todo_id)),
+    weeklyProgress: (unwrap(weeklyProgress) as HabitWeeklyProgress[]).filter((item) => visibleHabitIds.has(item.habit_id) && (sharedHabitIds.has(item.habit_id) || item.user_id === userId)),
+    schedules: (unwrap(schedules) as HabitSchedule[]).filter((item) => visibleHabitIds.has(item.habit_id)),
+    completions: (unwrap(completions) as Completion[]).filter((item) => visibleHabitIds.has(item.habit_id) && (sharedHabitIds.has(item.habit_id) || item.user_id === userId)),
     balance: pointBalances.find((item) => item.user_id === userId)?.balance ?? 0,
     balances: pointBalances as PointBalance[],
     connection: connectionState,
     rewards: unwrap(rewards) as Reward[],
     redemptions: unwrap(redemptions) as Redemption[],
-    ledger: unwrap(ledger) as LedgerEntry[],
-    feed: unwrap(feed) as FeedEntry[],
-    streaks,
+    ledger: (unwrap(ledger) as LedgerEntry[]).filter((item) => !item.habit_id || visibleHabitIds.has(item.habit_id)),
+    feed: (unwrap(feed) as FeedEntry[]).filter((item) => visibleHabitIds.has(item.habit_id)),
+    streaks: streaks.filter((item) => visibleHabitIds.has(item.habit_id)),
   }
 }
 
