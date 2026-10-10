@@ -38,6 +38,8 @@ export interface Todo {
   base_points: number
   archived: boolean
   completed_at: string | null
+  planned_date?: string | null
+  deleted_at?: string | null
   created_at: string
 }
 
@@ -71,6 +73,7 @@ export interface Habit {
   base_points: number
   weekly_target?: number | null
   archived: boolean
+  deleted_at?: string | null
   created_at: string
   updated_at: string
 }

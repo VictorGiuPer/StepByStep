@@ -9,14 +9,14 @@ export function isTodoAvailableToUser(todo: Todo, userId: string) {
 }
 
 export function isTodoVisibleToday(todo: Todo, userId: string, today: string, completions: TodoCompletion[]) {
-  if (!isTodoAvailableToUser(todo, userId)) return false
+  if (todo.deleted_at || !isTodoAvailableToUser(todo, userId)) return false
   const completion = activeTodoCompletion(todo.id, userId, completions)
-  return !completion || completion.completion_date === today
+  return completion ? completion.completion_date === today : Boolean(todo.planned_date && todo.planned_date <= today)
 }
 
 export function splitTodosForUser(todos: Todo[], userId: string, completions: TodoCompletion[]) {
   return todos.reduce<{ active: Todo[]; completed: Todo[] }>((result, todo) => {
-    if (!isTodoAvailableToUser(todo, userId)) return result
+    if (todo.deleted_at || !isTodoAvailableToUser(todo, userId)) return result
     if (activeTodoCompletion(todo.id, userId, completions)) result.completed.push(todo)
     else result.active.push(todo)
     return result

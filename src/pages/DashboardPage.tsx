@@ -236,6 +236,7 @@ export function DashboardPage({
     () =>
       snapshot.habits.filter(
         (habit) =>
+          !habit.deleted_at &&
           !habit.weekly_target &&
           isHabitDue(habit, today, userId, snapshot.schedules),
       ),
@@ -258,7 +259,7 @@ export function DashboardPage({
   const todos = snapshot.todos.filter((todo) =>
     isTodoVisibleToday(todo, userId, today, snapshot.todoCompletions),
   );
-  const flexibleHabits = snapshot.habits.filter((habit) => !habit.archived && habit.weekly_target && (habit.scope === "shared" || habit.owner_user_id === userId));
+  const flexibleHabits = snapshot.habits.filter((habit) => !habit.deleted_at && !habit.archived && habit.weekly_target && (habit.scope === "shared" || habit.owner_user_id === userId));
   return (
     <div className="space-y-5">
       <div>

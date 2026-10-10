@@ -206,6 +206,7 @@ function TodoModal({
   const [icon, setIcon] = useState(todo?.icon ?? "ListTodo");
   const [categoryId, setCategoryId] = useState(todo?.category_id ?? snapshot.categories[0]?.id ?? "");
   const [scope, setScope] = useState<Todo["scope"]>(todo?.scope ?? "personal");
+  const [plannedDate, setPlannedDate] = useState(todo ? todo.planned_date ?? "" : dateKeyInTimeZone(snapshot.settings.timezone));
   const [error, setError] = useState("");
   const canEdit = !todo || todo.scope === "shared" || todo.owner_user_id === userId;
   const save = useMutation({
@@ -217,6 +218,7 @@ function TodoModal({
         p_category_id: categoryId,
         p_scope: scope,
         p_size: size,
+        p_planned_date: plannedDate || null,
       });
       if (rpcError) throw friendlyError(rpcError);
     },
@@ -283,6 +285,11 @@ function TodoModal({
           </select>
         </div>
         <div>
+          <Label htmlFor="todo-planned-date">Plan for</Label>
+          <input id="todo-planned-date" className={inputClass} type="date" value={plannedDate} onChange={(event) => setPlannedDate(event.target.value)} />
+          <p className="mt-1 text-xs text-ink/45">To-dos planned for today or earlier stay on Today until complete. Leave blank to keep it unplanned.</p>
+        </div>
+        <div>
           <Label htmlFor="todo-icon">Icon</Label>
           <select
             id="todo-icon"
@@ -297,13 +304,7 @@ function TodoModal({
           </select>
         </div>
         {error && <Notice>{error}</Notice>}
-        {canEdit && <Button
-          type="submit"
-          className="w-full"
-          disabled={!name.trim() || !categoryId || save.isPending}
-        >
-          {save.isPending ? "Saving…" : "Save to-do"}
-        </Button>}
+        {canEdit && <div className="flex gap-2">{todo && <Button type="button" variant="danger" onClick={async () => { if (!isDemoMode) { const { error: deleteError } = await supabase.rpc("delete_todo", { p_todo_id: todo.id }); if (deleteError) { setError(friendlyError(deleteError).message); return; } await queryClient.invalidateQueries({ queryKey: ["snapshot", userId] }); } onClose(); }}><Trash2 size={16} /> Delete</Button>}<Button type="submit" className="ml-auto" disabled={!name.trim() || !categoryId || save.isPending}>{save.isPending ? "Saving…" : "Save to-do"}</Button></div>}
       </form>
     </Modal>
   );
@@ -332,6 +333,7 @@ function TodoSection({
   });
   const remove = useMutation({
     mutationFn: async (todoId: string) => {
+      if (isDemoMode) return;
       const { error: rpcError } = await supabase.rpc("delete_todo", {
         p_todo_id: todoId,
       });
@@ -398,7 +400,7 @@ function TodoSection({
                     {todo.name}
                   </p>
                   <p className="text-xs font-bold text-accent">
-                    {category ? categoryLabel(category) : "Uncategorised"} · {todo.scope === "shared" ? "Shared" : owner?.id === userId ? "Personal · You" : `Personal · ${owner?.display_name ?? "Partner"}`} · +{todo.base_points}
+                    {category ? categoryLabel(category) : "Uncategorised"} · {todo.scope === "shared" ? "Shared" : owner?.id === userId ? "Personal · You" : `Personal · ${owner?.display_name ?? "Partner"}`} · +{todo.base_points} · {todo.planned_date ? `Planned ${formatDate(todo.planned_date)}` : "Unplanned"}
                     {completion ? ` · Completed ${formatDate(completion.completion_date)}` : ""}
                   </p>
                 </div>
@@ -435,8 +437,10 @@ function scheduleLabel(habit: Habit) {
     : habit.frequency === "daily"
     ? "Daily"
     : habit.frequency === "weekly"
-      ? "Weekly"
-      : `${habit.custom_days?.length ?? 0} times/week`;
+      ? "Legacy weekly"
+      : habit.custom_days?.length === 7
+        ? "Daily"
+        : `${habit.custom_days?.length ?? 0} days/week`;
 }
 
 export function CategoriesPage({
@@ -455,7 +459,7 @@ export function CategoriesPage({
   const [habitState, setHabitState] = useState<"active" | "archived">("active");
   const habits = snapshot.habits.filter(
     (habit) =>
-      (habitState === "archived" ? habit.archived : !habit.archived) &&
+      !habit.deleted_at && (habitState === "archived" ? habit.archived : !habit.archived) &&
       (filter === "all" || habit.category_id === filter),
   );
   return (
@@ -600,8 +604,8 @@ export function CategoriesPage({
         {snapshot.categories.length ? (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {snapshot.categories.map((category) => {
-              const habitCount = snapshot.habits.filter((habit) => habit.category_id === category.id && !habit.archived).length;
-              const todoCount = snapshot.todos.filter((todo) => todo.category_id === category.id && !todo.archived).length;
+              const habitCount = snapshot.habits.filter((habit) => habit.category_id === category.id && !habit.deleted_at && !habit.archived).length;
+              const todoCount = snapshot.todos.filter((todo) => todo.category_id === category.id && !todo.deleted_at && !todo.archived).length;
               return <div key={category.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-soft">
                 <span className="grid size-10 place-items-center rounded-xl text-white" style={{ backgroundColor: category.color }}><AppIcon name={category.icon} size={18} /></span>
                 <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{categoryLabel(category)}</p><p className="text-xs font-bold text-ink/45">{habitCount} habit{habitCount === 1 ? "" : "s"} · {todoCount} to-do{todoCount === 1 ? "" : "s"}</p></div>
