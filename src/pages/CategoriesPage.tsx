@@ -154,6 +154,8 @@ function CategoryModalContent({
             <input
               className={inputClass}
               pattern="^#[0-9A-Fa-f]{6}$"
+              required
+              maxLength={7}
               value={color}
               onChange={(event) => setColor(event.target.value)}
             />
@@ -174,7 +176,7 @@ function CategoryModalContent({
           <Button
             type="submit"
             className="ml-auto"
-            disabled={!name.trim() || mutation.isPending}
+            disabled={!name.trim() || !/^#[0-9A-Fa-f]{6}$/.test(color) || mutation.isPending}
           >
             {mutation.isPending ? "Saving…" : "Save category"}
           </Button>

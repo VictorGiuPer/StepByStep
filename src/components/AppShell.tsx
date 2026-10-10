@@ -14,6 +14,14 @@ const navItems = [
   { to: '/stats', label: 'Stats + Shop', icon: BarChart3 },
 ]
 
+function isValidTimezone(value: string) {
+  try { new Intl.DateTimeFormat('en-US', { timeZone: value.trim() }); return Boolean(value.trim()) } catch { return false }
+}
+
+function isValidPartnerEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+}
+
 export function AppShell({ snapshot, children, demoUserId }: PropsWithChildren<{ snapshot: AppSnapshot; demoUserId?: string }>) {
   const { user, signOut } = useAuth()
   const queryClient = useQueryClient()
@@ -36,6 +44,14 @@ export function AppShell({ snapshot, children, demoUserId }: PropsWithChildren<{
   const saveSettings = useMutation({
     mutationFn: async () => {
       if (!effectiveUserId || demoUserId) return
+      if (!displayName.trim() || displayName.trim().length > 60) throw new Error('Enter a display name with up to 60 characters.')
+      if (!isValidTimezone(timezone)) throw new Error('Enter a valid IANA timezone, such as Europe/Brussels.')
+      if (avatarUrl.trim()) {
+        try {
+          const avatar = new URL(avatarUrl.trim())
+          if (!['http:', 'https:'].includes(avatar.protocol)) throw new Error()
+        } catch { throw new Error('Enter a valid http or https avatar URL, or leave it blank.') }
+      }
       const [profileResult, settingsResult] = await Promise.all([
         supabase.from('profiles').update({ display_name: displayName.trim(), avatar_url: avatarUrl.trim() || null }).eq('id', effectiveUserId),
         supabase.from('app_settings').update({ timezone: timezone.trim() }).eq('id', 1),
@@ -50,7 +66,8 @@ export function AppShell({ snapshot, children, demoUserId }: PropsWithChildren<{
   const link = useMutation({
     mutationFn: async () => {
       if (demoUserId) return
-      const { error } = await supabase.rpc('request_couple_link', { p_email: partnerEmail.trim() })
+      if (!isValidPartnerEmail(partnerEmail)) throw new Error('Enter a valid partner email address.')
+      const { error } = await supabase.rpc('request_couple_link', { p_email: partnerEmail.trim().toLowerCase() })
       if (error) throw error
     },
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['snapshot', effectiveUserId] }); setPartnerEmail('') },
@@ -88,14 +105,14 @@ export function AppShell({ snapshot, children, demoUserId }: PropsWithChildren<{
 
     <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="Your settings" description="Profile details are visible only to your connected partner." size="sm">
       <div className="space-y-4">
-        <div><Label htmlFor="display-name">Display name</Label><input id="display-name" className={inputClass} maxLength={60} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></div>
+        <div><Label htmlFor="display-name">Display name</Label><input id="display-name" className={inputClass} required maxLength={60} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></div>
         <div><Label htmlFor="avatar-url">Avatar URL (optional)</Label><input id="avatar-url" type="url" className={inputClass} placeholder="https://…" value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} /></div>
-        <div><Label htmlFor="timezone">Household timezone</Label><input id="timezone" className={inputClass} value={timezone} onChange={(event) => setTimezone(event.target.value)} /><p className="mt-1.5 text-xs leading-5 text-ink/45">Use an IANA timezone such as Europe/Brussels. This controls “today” and Monday–Sunday week boundaries.</p></div>
+        <div><Label htmlFor="timezone">Household timezone</Label><input id="timezone" className={inputClass} required maxLength={100} aria-invalid={Boolean(timezone.trim()) && !isValidTimezone(timezone)} value={timezone} onChange={(event) => setTimezone(event.target.value)} /><p className="mt-1.5 text-xs leading-5 text-ink/45">Use an IANA timezone such as Europe/Brussels. This controls “today” and Monday–Sunday week boundaries.</p></div>
         <div className="rounded-2xl bg-app-bg p-4">
-          <div className="flex gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent text-white"><HeartHandshake size={17} /></span><div><p className="font-black">Your couple</p>{snapshot.connection.state === 'connected' ? <p className="mt-1 text-xs leading-5 text-ink/55">Connected. Your shared habits, rewards, and progress are visible only to the two of you.</p> : snapshot.connection.state === 'pending' ? snapshot.connection.requested_to === effectiveUserId ? <><p className="mt-1 text-xs leading-5 text-ink/55">You have a request to connect accounts.</p><div className="mt-3 flex gap-2"><Button size="sm" variant="ghost" onClick={() => decideLink.mutate(false)} disabled={decideLink.isPending}>Decline</Button><Button size="sm" onClick={() => decideLink.mutate(true)} disabled={decideLink.isPending}>{decideLink.isPending ? 'Saving…' : 'Accept connection'}</Button></div></> : <p className="mt-1 text-xs leading-5 text-ink/55">Connection request sent. It will become active once your partner accepts it.</p> : <><p className="mt-1 text-xs leading-5 text-ink/55">Send a private request to the email they use to sign in. They must accept before either account can see shared progress.</p><div className="mt-3 flex gap-2"><div className="relative min-w-0 flex-1"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30" size={15} /><input aria-label="Partner email" className={`${inputClass} min-h-9 py-2 pl-9 text-xs`} type="email" value={partnerEmail} onChange={(event) => setPartnerEmail(event.target.value)} placeholder="partner@example.com" /></div><Button size="sm" onClick={() => { setFormError(''); link.mutate() }} disabled={Boolean(demoUserId) || !partnerEmail.trim() || link.isPending}>{link.isPending ? 'Sending…' : 'Connect'}</Button></div></>}</div></div>
+          <div className="flex gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent text-white"><HeartHandshake size={17} /></span><div><p className="font-black">Your couple</p>{snapshot.connection.state === 'connected' ? <p className="mt-1 text-xs leading-5 text-ink/55">Connected. Your shared habits, rewards, and progress are visible only to the two of you.</p> : snapshot.connection.state === 'pending' ? snapshot.connection.requested_to === effectiveUserId ? <><p className="mt-1 text-xs leading-5 text-ink/55">You have a request to connect accounts.</p><div className="mt-3 flex gap-2"><Button size="sm" variant="ghost" onClick={() => decideLink.mutate(false)} disabled={decideLink.isPending}>Decline</Button><Button size="sm" onClick={() => decideLink.mutate(true)} disabled={decideLink.isPending}>{decideLink.isPending ? 'Saving…' : 'Accept connection'}</Button></div></> : <p className="mt-1 text-xs leading-5 text-ink/55">Connection request sent. It will become active once your partner accepts it.</p> : <><p className="mt-1 text-xs leading-5 text-ink/55">Send a private request to the email they use to sign in. They must accept before either account can see shared progress.</p><div className="mt-3 flex gap-2"><div className="relative min-w-0 flex-1"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30" size={15} /><input aria-label="Partner email" className={`${inputClass} min-h-9 py-2 pl-9 text-xs`} type="email" autoComplete="email" value={partnerEmail} onChange={(event) => setPartnerEmail(event.target.value)} placeholder="partner@example.com" /></div><Button size="sm" onClick={() => { setFormError(''); link.mutate() }} disabled={Boolean(demoUserId) || !isValidPartnerEmail(partnerEmail) || link.isPending}>{link.isPending ? 'Sending…' : 'Connect'}</Button></div></>}</div></div>
         </div>
         {formError && <Notice>{formError}</Notice>}
-        <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-between"><Button variant="ghost" onClick={() => { if (demoUserId) window.location.href = window.location.pathname; else void signOut() }}><LogOut size={17} /> {demoUserId ? 'Exit preview' : 'Sign out'}</Button><Button disabled={Boolean(demoUserId) || !displayName.trim() || !timezone.trim() || saveSettings.isPending} onClick={() => { setFormError(''); saveSettings.mutate() }}>{demoUserId ? 'Preview only' : saveSettings.isPending ? 'Saving…' : 'Save settings'}</Button></div>
+        <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-between"><Button variant="ghost" onClick={() => { if (demoUserId) window.location.href = window.location.pathname; else void signOut() }}><LogOut size={17} /> {demoUserId ? 'Exit preview' : 'Sign out'}</Button><Button disabled={Boolean(demoUserId) || !displayName.trim() || !isValidTimezone(timezone) || saveSettings.isPending} onClick={() => { setFormError(''); saveSettings.mutate() }}>{demoUserId ? 'Preview only' : saveSettings.isPending ? 'Saving…' : 'Save settings'}</Button></div>
       </div>
     </Modal>
   </div>

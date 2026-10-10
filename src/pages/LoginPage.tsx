@@ -15,7 +15,7 @@ export function LoginPage() {
     event.preventDefault()
     setError('')
     setBusy(true)
-    try { await signIn(email, password) } catch (reason) { setError((reason as Error).message) } finally { setBusy(false) }
+    try { await signIn(email.trim().toLowerCase(), password) } catch (reason) { setError((reason as Error).message) } finally { setBusy(false) }
   }
 
   return <main className="relative grid min-h-screen overflow-hidden bg-app-bg lg:grid-cols-[1.08fr_.92fr]">

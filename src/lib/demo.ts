@@ -58,7 +58,9 @@ export function previewComplete(snapshot: AppSnapshot, userId: string, habitId: 
   const interval = intervalStart(schedule, date)
   if (snapshot.completions.some((item) => item.habit_id === habitId && item.user_id === userId && item.schedule_version_id === schedule.id && item.interval_start === interval)) throw new Error('This habit is already complete for today.')
   const previousStreak = snapshot.streaks.find((item) => item.habit_id === habitId && item.user_id === userId)?.current_streak ?? 0
-  const bonus = Math.min(previousStreak, 5); const awarded = habit.base_points + bonus; const now = new Date().toISOString(); const id = `preview-completion-${Date.now()}`
+  const nextStreak = previousStreak + 1
+  const bonus = nextStreak === 7 || (nextStreak >= 30 && nextStreak % 30 === 0) ? 1 : 0
+  const awarded = habit.base_points + bonus; const now = new Date().toISOString(); const id = `preview-completion-${Date.now()}`
   const category = snapshot.categories.find((item) => item.id === habit.category_id)
   const completion = { id, habit_id: habitId, schedule_version_id: schedule.id, user_id: userId, date, interval_start: interval, note: null, base_points_snapshot: habit.base_points, created_at: now }
   const ledger = { id: `preview-ledger-${Date.now()}`, user_id: userId, date, points: awarded, source: 'habit_completion' as const, created_at: now, habit_completion_id: id, redemption_id: null, habit_id: habitId, habit_name: habit.name, category_id: category?.id ?? null, category_name: category?.name ?? null, reward_name: null }

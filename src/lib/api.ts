@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 import { isCategoryAvailableToUser } from './categories'
 import { isHabitAvailableToUser } from './date'
 import { isTodoAvailableToUser } from './todos'
+import { isDemoMode } from './demo'
 import type { AppSettings, AppSnapshot, Category, Completion, CoupleConnection, FeedEntry, Habit, HabitSchedule, HabitStreak, HabitWeeklyProgress, LedgerEntry, PointBalance, Profile, Redemption, Reward, Todo, TodoCompletion } from '@/types'
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
@@ -18,6 +19,12 @@ export async function loadSnapshot(userId: string): Promise<AppSnapshot> {
   ])
   const visibleProfiles = unwrap(profiles) as Profile[]
   const connectionState = ((unwrap(connection) as CoupleConnection[])[0] ?? { state: 'unlinked', request_id: null, requested_by: null, requested_to: null, created_at: null }) as CoupleConnection
+  if (!isDemoMode && connectionState.state === 'connected') {
+    const penaltyResult = await supabase.rpc('apply_habit_miss_penalties')
+    if (penaltyResult.error && !['PGRST202', '42883'].includes(penaltyResult.error.code ?? '')) {
+      throw new Error(penaltyResult.error.message)
+    }
+  }
   const [settings, categories, habits, todos, todoCompletions, weeklyProgress, schedules, completions, balances, rewards, redemptions, ledger, feed, streakGroups] = await Promise.all([
     supabase.from('app_settings').select('id,timezone').eq('id', 1).single(),
     supabase.from('categories').select('*').order('sort_order').order('name'),

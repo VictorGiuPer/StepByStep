@@ -3,7 +3,7 @@ export type HabitScope = 'personal' | 'shared'
 export type HabitFrequency = 'daily' | 'weekly' | 'custom_days' | 'flexible_weekly'
 export type HabitSize = 'small' | 'medium' | 'large'
 export type RedemptionStatus = 'pending_confirmation' | 'confirmed' | 'declined'
-export type LedgerSource = 'habit_completion' | 'streak_bonus' | 'habit_completion_reversal' | 'habit_completion_restore' | 'reward_redemption' | 'todo_completion' | 'todo_completion_reversal' | 'todo_completion_restore' | 'weekly_habit_progress' | 'weekly_habit_progress_reversal'
+export type LedgerSource = 'habit_completion' | 'streak_bonus' | 'habit_completion_reversal' | 'habit_completion_restore' | 'habit_miss_penalty' | 'reward_redemption' | 'todo_completion' | 'todo_completion_reversal' | 'todo_completion_restore' | 'weekly_habit_progress' | 'weekly_habit_progress_reversal'
 
 export interface Profile {
   id: string
